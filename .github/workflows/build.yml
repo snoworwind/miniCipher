@@ -55,22 +55,6 @@ jobs:
         restore-keys: |
           ${{ runner.os }}-pip-
 
-    - name: Generate version information
-      id: version
-      shell: bash
-      run: |
-        # Use version.py script to generate version information
-        python version.py --type dev --platform ${{ matrix.platform }} --architecture ${{ matrix.architecture }}
-        
-        # Extract version from version.txt for GitHub Actions outputs
-        VERSION=$(grep '^version:' version.txt | cut -d' ' -f2)
-        COMMIT_HASH=$(grep '^commit_hash:' version.txt | cut -d' ' -f2)
-        
-        echo "VERSION=$VERSION" >> $GITHUB_OUTPUT
-        echo "COMMIT_HASH=$COMMIT_HASH" >> $GITHUB_OUTPUT
-        echo "RUN_ID=${{ github.run_id }}" >> $GITHUB_OUTPUT
-        echo "RUN_NUMBER=${{ github.run_number }}" >> $GITHUB_OUTPUT
-
     - name: Display Python version
       run: |
         python --version
@@ -159,9 +143,6 @@ jobs:
         
         echo "Artifact prepared: ${{ matrix.output_name }}"
         
-        # Copy version file
-        cp version.txt dist/version-${{ matrix.platform }}-${{ matrix.architecture }}.txt
-        
         # Display build results
         echo "Build artifacts:"
         ls -la dist/
@@ -172,7 +153,6 @@ jobs:
         name: cipher-${{ matrix.platform }}-${{ matrix.architecture }}
         path: |
           dist/${{ matrix.output_name }}
-          dist/version-${{ matrix.platform }}-${{ matrix.architecture }}.txt
         retention-days: 30
 
   test:

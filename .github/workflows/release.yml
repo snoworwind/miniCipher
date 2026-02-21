@@ -43,27 +43,6 @@ jobs:
       with:
         fetch-depth: 0  # Get full history for git describe
 
-    - name: Get version from tag
-      id: get_version
-      shell: bash
-      run: |
-        # Get version from git tag
-        if [ -n "${{ github.ref_name }}" ]; then
-          VERSION="${{ github.ref_name }}"
-          echo "VERSION=$VERSION" >> $GITHUB_OUTPUT
-          echo "TAG_NAME=$VERSION" >> $GITHUB_OUTPUT
-          
-          # Clean version for filenames - keep dots for readability
-          CLEAN_VERSION=$(echo "$VERSION" | sed 's/^v//')
-          echo "CLEAN_VERSION=$CLEAN_VERSION" >> $GITHUB_OUTPUT
-          
-          echo "Building version: $VERSION"
-          echo "Clean version for files: $CLEAN_VERSION"
-        else
-          echo "ERROR: No tag found!"
-          exit 1
-        fi
-
     - name: Set up Python
       uses: actions/setup-python@v5
       with:
@@ -76,43 +55,6 @@ jobs:
         key: ${{ runner.os }}-pip-${{ hashFiles('requirements.txt') }}
         restore-keys: |
           ${{ runner.os }}-pip-
-
-
-    - name: Generate version information
-      shell: bash
-      run: |
-        # Use version.py script to generate version information for release
-        python version.py --type release --platform ${{ matrix.platform }} --architecture ${{ matrix.architecture }}
-        
-        # Extract version from version.txt
-        VERSION=$(grep '^version:' version.txt | cut -d' ' -f2)
-        BUILD_DATE=$(grep '^build_date:' version.txt | cut -d' ' -f2)
-        COMMIT_HASH=$(grep '^commit_hash:' version.txt | cut -d' ' -f2)
-        COMMIT_COUNT=$(grep '^commit_count:' version.txt | cut -d' ' -f2)
-        
-        echo "=== VERSION INFORMATION ==="
-        echo "Version: $VERSION"
-        echo "Build date: $BUILD_DATE"
-        echo "Commit hash: $COMMIT_HASH"
-        echo "Commit count: $COMMIT_COUNT"
-        echo "Platform: ${{ matrix.platform }}-${{ matrix.architecture }}"
-        echo "=========================="
-        
-        # Create build information file using actual version information
-        cat > build-info-${{ matrix.platform }}.txt << EOF
-        MiniCipher Build Information
-        ============================
-        Version: $VERSION
-        Platform: ${{ matrix.platform }}-${{ matrix.architecture }}
-        Build date: $BUILD_DATE
-        Commit: $(git rev-parse HEAD)
-        Commit short: $COMMIT_HASH
-        Python version: $(python --version)
-        Build runner: ${{ matrix.os }}
-        
-        SHA256 Checksums:
-        -----------------
-        EOF
 
     - name: Install system dependencies
       shell: bash
@@ -205,8 +147,20 @@ jobs:
         echo "SHA256: $SHA256"
         echo "File: $RELEASE_FILE"
         
-        # Update build information file
-        echo "${{ matrix.output_name }}: $SHA256" >> build-info-${{ matrix.platform }}.txt
+        # Create build information file without version
+        cat > build-info-${{ matrix.platform }}.txt << EOF
+        MiniCipher Build Information
+        ============================
+        Platform: ${{ matrix.platform }}-${{ matrix.architecture }}
+        Build date: $(date -u +'%Y-%m-%d %H:%M:%S UTC')
+        Commit: $(git rev-parse HEAD)
+        Python version: $(python --version)
+        Build runner: ${{ matrix.os }}
+        
+        SHA256 Checksums:
+        -----------------
+        ${{ matrix.output_name }}: $SHA256
+        EOF
         
         # Create platform-specific installation instructions
         case "${{ matrix.platform }}" in
@@ -221,11 +175,10 @@ jobs:
             ;;
         esac
         
-        # Create final version information file
+        # Create final release information file
         cat > release-${{ matrix.platform }}.txt << EOF
         MiniCipher Release
         ==================
-        Version: ${{ steps.get_version.outputs.VERSION }}
         File: ${{ matrix.output_name }}
         Platform: ${{ matrix.platform }}-${{ matrix.architecture }}
         SHA256: $SHA256
@@ -248,7 +201,7 @@ jobs:
     - name: Upload artifacts for release
       uses: actions/upload-artifact@v4
       with:
-        name: release-${{ matrix.platform }}-${{ steps.get_version.outputs.CLEAN_VERSION }}
+        name: release-${{ matrix.platform }}
         path: |
           dist/${{ matrix.output_name }}
           build-info-${{ matrix.platform }}.txt
@@ -296,11 +249,10 @@ jobs:
       run: |
         echo "Generating release notes..."
         
-        # Get latest commit information
+        # Get tag information
         LATEST_TAG="${{ github.ref_name }}"
-        PREVIOUS_TAG=$(git describe --tags --abbrev=0 "$LATEST_TAG^" 2>/dev/null || echo "")
         
-        echo "# MiniCipher $LATEST_TAG" > release-notes.md
+        echo "# MiniCipher Release" > release-notes.md
         echo "" >> release-notes.md
         echo "## Downloads" >> release-notes.md
         echo "" >> release-notes.md
@@ -338,14 +290,11 @@ jobs:
         echo "3. Run: `./Cipher-linux-x64`" >> release-notes.md
         echo "" >> release-notes.md
         
-        if [ -n "$PREVIOUS_TAG" ]; then
-          echo "## Changes since $PREVIOUS_TAG" >> release-notes.md
+        # Add tag information if available
+        if [ -n "$LATEST_TAG" ]; then
+          echo "## Release Information" >> release-notes.md
           echo "" >> release-notes.md
-          echo '```' >> release-notes.md
-          git log --oneline --no-decorate "$PREVIOUS_TAG..$LATEST_TAG" >> release-notes.md
-          echo '```' >> release-notes.md
-        else
-          echo "## Initial Release" >> release-notes.md
+          echo "- Tag: $LATEST_TAG" >> release-notes.md
         fi
         
         echo "" >> release-notes.md
@@ -417,15 +366,6 @@ jobs:
             echo "$RELEASE_CONTENT" | head -10
           fi
         fi
-        
-        # Check workflow permissions
-        echo ""
-        echo "=== Workflow Permission Recommendations ==="
-        echo "If you see 403 errors, check your repository settings:"
-        echo "1. Go to Settings → Actions → General"
-        echo "2. Under 'Workflow permissions', select 'Read and write permissions'"
-        echo "3. Make sure 'Allow GitHub Actions to create and approve pull requests' is enabled"
-        echo "==========================================="
 
     - name: Delete existing release if exists
       shell: bash
@@ -561,7 +501,7 @@ jobs:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       with:
         tag_name: ${{ github.ref_name }}
-        name: MiniCipher ${{ github.ref_name }}
+        name: MiniCipher Release
         body_path: release-notes.md
         draft: false
         prerelease: ${{ contains(github.ref_name, '-') }}  # Mark as prerelease if tag contains '-'
@@ -586,7 +526,7 @@ jobs:
         echo "   RELEASE COMPLETED"
         echo "============================="
         echo ""
-        echo "Version: ${{ github.ref_name }}"
+        echo "Tag: ${{ github.ref_name }}"
         echo "Status: ${{ job.status }}"
         echo ""
         echo "Release URL:"
