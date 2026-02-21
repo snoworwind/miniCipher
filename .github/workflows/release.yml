@@ -438,8 +438,8 @@ jobs:
         draft: false
         prerelease: ${{ contains(github.ref_name, '-') }}  # Mark as prerelease if tag contains '-'
         files: |
-          release-artifacts/**/*.exe
-          release-artifacts/**/cipher-*
+          release-artifacts/**/dist/*.exe
+          release-artifacts/**/dist/Cipher-*
           release-artifacts/**/*.txt
 
   notify:
