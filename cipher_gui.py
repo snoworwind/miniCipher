@@ -1,37 +1,77 @@
+#!/usr/bin/env python3
 """
-文件加密/解密GUI工具 - 稳定版
+文件加密/解密GUI工具 - 支持多语言和配置文件
 支持多种加密算法：OTP和AES256-GCM
-改进版：解决UI稳定性问题，增强错误处理
+改进版：解决UI稳定性问题，增强错误处理，支持国际化
 """
 
 import os
 import tkinter as tk
 from tkinter import filedialog, messagebox, ttk
+from config_manager import get_config_manager
+from translations import TranslationKeys, get_translator, _
 
 class CipherGUI:
-    """加密工具GUI主类 - 稳定版本"""
+    """加密工具GUI主类 - 支持多语言和配置"""
     
     def __init__(self):
+        # 初始化配置和翻译
+        self.config_manager = get_config_manager()
+        self.translator = get_translator()
+        
+        # 设置默认值
+        default_algorithm = self.config_manager.get_default_algorithm()
+        default_key_type = self.config_manager.get_default_key_type()
+        
         self.root = tk.Tk()
-        self.root.title("文件加密/解密工具 - Cipher")
+        self.root.title(_(TranslationKeys.APP_TITLE))
         
         # 设置窗口最小尺寸
         self.root.minsize(800, 600)
         
+        # 创建菜单栏
+        self._create_menu_bar()
+        
         # 初始化所有UI组件变量
-        self._init_ui_variables()
+        self._init_ui_variables(default_algorithm, default_key_type)
         
         # 一次性构建完整UI，避免延迟加载导致的闪烁
         self.setup_complete_ui()
         
+        # 应用配置
+        self._apply_configuration()
+        
         # 初始UI状态更新
         self.update_ui_state()
     
-    def _init_ui_variables(self):
+    def _create_menu_bar(self):
+        """创建菜单栏"""
+        menubar = tk.Menu(self.root)
+        self.root.config(menu=menubar)
+        
+        # 文件菜单
+        file_menu = tk.Menu(menubar, tearoff=0)
+        menubar.add_cascade(label=_(TranslationKeys.FILE_MENU), menu=file_menu)
+        file_menu.add_command(label=_(TranslationKeys.SETTINGS_MENU), command=self._open_settings)
+        file_menu.add_separator()
+        file_menu.add_command(label=_(TranslationKeys.EXIT), command=self.root.quit)
+        
+        # 语言菜单
+        language_menu = tk.Menu(menubar, tearoff=0)
+        menubar.add_cascade(label=_(TranslationKeys.LANGUAGE_MENU), menu=language_menu)
+        language_menu.add_command(label="简体中文", command=lambda: self._change_language("zh_CN"))
+        language_menu.add_command(label="English", command=lambda: self._change_language("en_US"))
+        
+        # 帮助菜单
+        help_menu = tk.Menu(menubar, tearoff=0)
+        menubar.add_cascade(label=_(TranslationKeys.HELP_MENU), menu=help_menu)
+        help_menu.add_command(label=_(TranslationKeys.ABOUT), command=self._show_about)
+    
+    def _init_ui_variables(self, default_algorithm, default_key_type):
         """初始化所有UI组件变量，确保安全引用"""
         # 算法选择相关
-        self.algorithm_var = tk.StringVar(value="OTP")
-        self.key_type_var = tk.StringVar(value="random")
+        self.algorithm_var = tk.StringVar(value=default_algorithm)
+        self.key_type_var = tk.StringVar(value=default_key_type)
         self.algorithm_combo = None
         self.key_type_combo = None
         self.algorithm_info = None
@@ -57,6 +97,27 @@ class CipherGUI:
         self._get_algorithm = None
         self._FileFormatHandler = None
     
+    def _apply_configuration(self):
+        """应用配置文件中的设置"""
+        # 如果有默认输入/输出目录，设置到输入框
+        default_input_dir = self.config_manager.get_default_input_dir()
+        default_output_dir = self.config_manager.get_default_output_dir()
+        
+        if default_input_dir and self.entry_input_file:
+            self.entry_input_file.delete(0, tk.END)
+            self.entry_input_file.insert(0, default_input_dir)
+        
+        if default_output_dir and self.entry_output_dir:
+            self.entry_output_dir.delete(0, tk.END)
+            self.entry_output_dir.insert(0, default_output_dir)
+        
+        # 如果有上次使用的文件夹，且配置允许记住
+        if self.config_manager.should_remember_last_folder():
+            last_input_folder = self.config_manager.get_last_input_folder()
+            last_output_folder = self.config_manager.get_last_output_folder()
+            
+            # 这里可以在文件对话框中使用这些路径
+    
     def setup_complete_ui(self):
         """设置完整的用户界面（一次性构建）"""
         # 创建主容器
@@ -64,11 +125,11 @@ class CipherGUI:
         main_container.pack(fill="both", expand=True, padx=10, pady=10)
         
         # 算法选择部分
-        frame_algorithm = tk.LabelFrame(main_container, text="算法设置")
+        frame_algorithm = tk.LabelFrame(main_container, text=_(TranslationKeys.ALGORITHM_SETTINGS))
         frame_algorithm.pack(fill="x", padx=5, pady=5)
         
         # 算法选择
-        tk.Label(frame_algorithm, text="加密算法：").grid(row=0, column=0, padx=5, pady=10, sticky="w")
+        tk.Label(frame_algorithm, text=_(TranslationKeys.ENCRYPTION_ALGORITHM)).grid(row=0, column=0, padx=5, pady=10, sticky="w")
         self.algorithm_combo = ttk.Combobox(
             frame_algorithm, 
             textvariable=self.algorithm_var,
@@ -80,7 +141,7 @@ class CipherGUI:
         self.algorithm_combo.bind("<<ComboboxSelected>>", self.on_algorithm_changed)
         
         # 密钥类型选择
-        tk.Label(frame_algorithm, text="密钥类型：").grid(row=0, column=2, padx=5, pady=10, sticky="w")
+        tk.Label(frame_algorithm, text=_(TranslationKeys.KEY_TYPE)).grid(row=0, column=2, padx=5, pady=10, sticky="w")
         self.key_type_combo = ttk.Combobox(
             frame_algorithm,
             textvariable=self.key_type_var,
@@ -92,12 +153,12 @@ class CipherGUI:
         self.key_type_combo.bind("<<ComboboxSelected>>", self.on_key_type_changed)
         
         # 密码输入框（默认隐藏）
-        tk.Label(frame_algorithm, text="密码：").grid(row=0, column=4, padx=5, pady=10, sticky="w")
+        tk.Label(frame_algorithm, text=_(TranslationKeys.PASSWORD)).grid(row=0, column=4, padx=5, pady=10, sticky="w")
         self.password_entry = tk.Entry(frame_algorithm, width=20, show="*")
         self.password_entry.grid(row=0, column=5, padx=5, pady=10)
         
         # 算法信息标签
-        self.algorithm_info = tk.Label(frame_algorithm, text="Cipher文件加密工具 - 选择算法开始", 
+        self.algorithm_info = tk.Label(frame_algorithm, text=_("Cipher文件加密工具 - 选择算法开始"), 
                                       font=("Arial", 10), fg="blue")
         self.algorithm_info.grid(row=1, column=0, columnspan=6, padx=5, pady=5)
         
@@ -106,19 +167,19 @@ class CipherGUI:
         frames_container.pack(fill="both", expand=True, pady=10)
         
         # 加密部分
-        frame_encrypt = tk.LabelFrame(frames_container, text="加密")
+        frame_encrypt = tk.LabelFrame(frames_container, text=_(TranslationKeys.ENCRYPTION))
         frame_encrypt.pack(side="left", fill="both", expand=True, padx=5, pady=5)
         
         self._setup_encrypt_frame(frame_encrypt)
         
         # 解密部分
-        frame_decrypt = tk.LabelFrame(frames_container, text="解密")
+        frame_decrypt = tk.LabelFrame(frames_container, text=_(TranslationKeys.DECRYPTION))
         frame_decrypt.pack(side="right", fill="both", expand=True, padx=5, pady=5)
         
         self._setup_decrypt_frame(frame_decrypt)
         
         # 状态栏
-        self.status_bar = tk.Label(self.root, text="就绪", bd=1, relief=tk.SUNKEN, anchor=tk.W)
+        self.status_bar = tk.Label(self.root, text=_(TranslationKeys.READY), bd=1, relief=tk.SUNKEN, anchor=tk.W)
         self.status_bar.pack(side=tk.BOTTOM, fill=tk.X)
         
         # 初始化事件绑定
@@ -127,78 +188,77 @@ class CipherGUI:
     def _setup_encrypt_frame(self, frame):
         """设置加密部分的UI"""
         # 输入文件
-        tk.Label(frame, text="输入文件路径：").grid(row=0, column=0, padx=10, pady=10, sticky="w")
+        tk.Label(frame, text=_(TranslationKeys.INPUT_FILE_PATH)).grid(row=0, column=0, padx=10, pady=10, sticky="w")
         self.entry_input_file = tk.Entry(frame, width=50)
         self.entry_input_file.grid(row=0, column=1, padx=10, pady=10)
-        tk.Button(frame, text="浏览", command=lambda: self.browse_file(self.entry_input_file), 
+        tk.Button(frame, text=_(TranslationKeys.BROWSE), command=lambda: self.browse_file(self.entry_input_file), 
                  bg="#e0e0e0").grid(row=0, column=2, padx=10, pady=10)
         
         # 输出目录
-        tk.Label(frame, text="输出目录路径：").grid(row=1, column=0, padx=10, pady=10, sticky="w")
+        tk.Label(frame, text=_(TranslationKeys.OUTPUT_DIRECTORY_PATH)).grid(row=1, column=0, padx=10, pady=10, sticky="w")
         self.entry_output_dir = tk.Entry(frame, width=50)
         self.entry_output_dir.grid(row=1, column=1, padx=10, pady=10)
-        tk.Button(frame, text="浏览", command=lambda: self.browse_directory(self.entry_output_dir),
+        tk.Button(frame, text=_(TranslationKeys.BROWSE), command=lambda: self.browse_directory(self.entry_output_dir),
                  bg="#e0e0e0").grid(row=1, column=2, padx=10, pady=10)
         
         # 加密按钮
-        tk.Button(frame, text="开始加密", command=self.encrypt, 
+        tk.Button(frame, text=_(TranslationKeys.START_ENCRYPTION), command=self.encrypt, 
                  bg="#4CAF50", fg="white", font=("Arial", 12, "bold"),
                  padx=20, pady=10).grid(row=2, column=0, columnspan=3, pady=20)
         
         # 添加一些提示信息
-        tk.Label(frame, text="提示：", font=("Arial", 10, "bold"), fg="#666").grid(row=3, column=0, sticky="w", padx=10)
-        tk.Label(frame, text="• 支持所有文件类型\n• 输出文件为.enc格式\n• 密钥文件与密文文件一同保存", 
+        tk.Label(frame, text=_(TranslationKeys.TIPS), font=("Arial", 10, "bold"), fg="#666").grid(row=3, column=0, sticky="w", padx=10)
+        tk.Label(frame, text=_(TranslationKeys.TIPS_ENCRYPT), 
                 justify="left", fg="#666").grid(row=3, column=1, columnspan=2, sticky="w", padx=10)
     
     def _setup_decrypt_frame(self, frame):
         """设置解密部分的UI"""
         # 输入密文文件
-        tk.Label(frame, text="输入密文路径：").grid(row=0, column=0, padx=10, pady=10, sticky="w")
+        tk.Label(frame, text=_(TranslationKeys.INPUT_CIPHER_PATH)).grid(row=0, column=0, padx=10, pady=10, sticky="w")
         self.entry_input_cipher = tk.Entry(frame, width=50)
         self.entry_input_cipher.grid(row=0, column=1, padx=10, pady=10)
-        tk.Button(frame, text="浏览", command=lambda: self.browse_file(self.entry_input_cipher),
+        tk.Button(frame, text=_(TranslationKeys.BROWSE), command=lambda: self.browse_file(self.entry_input_cipher),
                  bg="#e0e0e0").grid(row=0, column=2, padx=10, pady=10)
         
         # 密钥文件（仅OTP和随机密钥AES）
-        tk.Label(frame, text="密钥文件路径：").grid(row=1, column=0, padx=10, pady=10, sticky="w")
+        tk.Label(frame, text=_(TranslationKeys.KEY_FILE_PATH)).grid(row=1, column=0, padx=10, pady=10, sticky="w")
         self.entry_key_file = tk.Entry(frame, width=50)
         self.entry_key_file.grid(row=1, column=1, padx=10, pady=10)
-        tk.Button(frame, text="浏览", command=lambda: self.browse_file(self.entry_key_file),
+        tk.Button(frame, text=_(TranslationKeys.BROWSE), command=lambda: self.browse_file(self.entry_key_file),
                  bg="#e0e0e0").grid(row=1, column=2, padx=10, pady=10)
         
         # 解密密码（密码模式AES）
-        tk.Label(frame, text="解密密码：").grid(row=2, column=0, padx=10, pady=10, sticky="w")
+        tk.Label(frame, text=_(TranslationKeys.DECRYPTION_PASSWORD)).grid(row=2, column=0, padx=10, pady=10, sticky="w")
         self.entry_decrypt_password = tk.Entry(frame, width=50, show="*")
         self.entry_decrypt_password.grid(row=2, column=1, padx=10, pady=10)
         
         # 输出目录
-        tk.Label(frame, text="输出目录路径：").grid(row=3, column=0, padx=10, pady=10, sticky="w")
+        tk.Label(frame, text=_(TranslationKeys.DECRYPTION_OUTPUT_PATH)).grid(row=3, column=0, padx=10, pady=10, sticky="w")
         self.entry_decrypt_output = tk.Entry(frame, width=50)
         self.entry_decrypt_output.grid(row=3, column=1, padx=10, pady=10)
-        tk.Button(frame, text="浏览", command=lambda: self.browse_directory(self.entry_decrypt_output),
+        tk.Button(frame, text=_(TranslationKeys.BROWSE), command=lambda: self.browse_directory(self.entry_decrypt_output),
                  bg="#e0e0e0").grid(row=3, column=2, padx=10, pady=10)
         
         # 解密按钮
-        tk.Button(frame, text="开始解密", command=self.decrypt,
+        tk.Button(frame, text=_(TranslationKeys.START_DECRYPTION), command=self.decrypt,
                  bg="#2196F3", fg="white", font=("Arial", 12, "bold"),
                  padx=20, pady=10).grid(row=4, column=0, columnspan=3, pady=20)
         
         # 添加一些提示信息
-        tk.Label(frame, text="提示：", font=("Arial", 10, "bold"), fg="#666").grid(row=5, column=0, sticky="w", padx=10)
-        tk.Label(frame, text="• 支持OTP和AES256-GCM算法\n• 密码模式无需密钥文件\n• 输出为原始文件格式", 
+        tk.Label(frame, text=_(TranslationKeys.TIPS), font=("Arial", 10, "bold"), fg="#666").grid(row=5, column=0, sticky="w", padx=10)
+        tk.Label(frame, text=_(TranslationKeys.TIPS_DECRYPT), 
                 justify="left", fg="#666").grid(row=5, column=1, columnspan=2, sticky="w", padx=10)
-    
     
     def on_algorithm_changed(self, event=None):
         """算法选择变更处理"""
         algorithm = self.algorithm_var.get()
         if algorithm == "OTP":
-            self.algorithm_info.config(text="OTP: 一次性密码本，密钥长度等于文件长度")
+            self.algorithm_info.config(text=_(TranslationKeys.OTP_ALGORITHM_INFO))
             # OTP只支持随机密钥
             self.key_type_var.set("random")
             self.key_type_combo.config(state="disabled")
         else:  # AES256
-            self.algorithm_info.config(text="AES256-GCM: 高级加密标准，256位密钥，GCM模式")
+            self.algorithm_info.config(text=_(TranslationKeys.AES_ALGORITHM_INFO))
             self.key_type_combo.config(state="readonly")
         
         self.update_ui_state()
@@ -243,9 +303,9 @@ class CipherGUI:
             # 更新算法信息
             if self.algorithm_info:
                 if algorithm == "OTP":
-                    self.algorithm_info.config(text="OTP: 一次性密码本，密钥长度等于文件长度")
+                    self.algorithm_info.config(text=_(TranslationKeys.OTP_ALGORITHM_INFO))
                 else:
-                    self.algorithm_info.config(text="AES256-GCM: 高级加密标准，256位密钥，GCM模式")
+                    self.algorithm_info.config(text=_(TranslationKeys.AES_ALGORITHM_INFO))
                     
         except Exception as e:
             # 安全地处理UI状态更新错误
@@ -254,17 +314,40 @@ class CipherGUI:
     
     def browse_file(self, entry):
         """文件选择对话框"""
-        file_path = filedialog.askopenfilename()
+        # 使用上次访问的文件夹（如果配置允许）
+        initial_dir = None
+        if self.config_manager.should_remember_last_folder():
+            last_folder = self.config_manager.get_last_input_folder()
+            if last_folder and os.path.exists(last_folder):
+                initial_dir = last_folder
+        
+        file_path = filedialog.askopenfilename(initialdir=initial_dir)
         if file_path:
             entry.delete(0, tk.END)
             entry.insert(0, file_path)
+            
+            # 保存文件夹路径
+            if self.config_manager.should_remember_last_folder():
+                folder_path = os.path.dirname(file_path)
+                self.config_manager.set_last_input_folder(folder_path)
     
     def browse_directory(self, entry):
         """目录选择对话框"""
-        directory_path = filedialog.askdirectory()
+        # 使用上次访问的文件夹（如果配置允许）
+        initial_dir = None
+        if self.config_manager.should_remember_last_folder():
+            last_folder = self.config_manager.get_last_output_folder()
+            if last_folder and os.path.exists(last_folder):
+                initial_dir = last_folder
+        
+        directory_path = filedialog.askdirectory(initialdir=initial_dir)
         if directory_path:
             entry.delete(0, tk.END)
             entry.insert(0, directory_path)
+            
+            # 保存文件夹路径
+            if self.config_manager.should_remember_last_folder():
+                self.config_manager.set_last_output_folder(directory_path)
     
     def _import_cipher_modules(self):
         """导入加密模块，使用缓存避免重复导入"""
@@ -280,39 +363,41 @@ class CipherGUI:
                 self._cipher_modules_imported = True
                 return True
             except ImportError as e:
-                self._show_error_message(f"导入加密模块失败: {e}")
+                self._show_error_message(_(TranslationKeys.ERROR_ENCRYPTION_FAILED, message=str(e)))
                 return False
         return True
     
     def _validate_password_strength(self, password):
         """验证密码强度"""
         if not password:
-            return False, "密码不能为空"
+            return False, _(TranslationKeys.ERROR_INVALID_PASSWORD)
         
-        if len(password) < 8:
-            return False, "密码至少需要8个字符"
+        min_length = self.config_manager.get_password_min_length()
+        if len(password) < min_length:
+            return False, _(TranslationKeys.ERROR_PASSWORD_TOO_SHORT, min_length=min_length)
         
-        # 检查密码复杂度
-        has_upper = any(c.isupper() for c in password)
-        has_lower = any(c.islower() for c in password)
-        has_digit = any(c.isdigit() for c in password)
+        # 检查密码复杂度（如果配置要求）
+        if self.config_manager.requires_strong_password():
+            has_upper = any(c.isupper() for c in password)
+            has_lower = any(c.islower() for c in password)
+            has_digit = any(c.isdigit() for c in password)
+            
+            if not (has_upper and has_lower and has_digit):
+                return False, _(TranslationKeys.ERROR_PASSWORD_STRENGTH)
         
-        if not (has_upper and has_lower and has_digit):
-            return False, "密码应包含大小写字母和数字"
-        
-        return True, "密码强度合格"
+        return True, _(TranslationKeys.OK)
     
     def _show_error_message(self, message):
         """显示错误消息"""
-        messagebox.showerror("错误", message)
+        messagebox.showerror(_(TranslationKeys.ERROR), message)
         if self.status_bar:
-            self.status_bar.config(text=f"错误: {message[:50]}...")
+            self.status_bar.config(text=f"{_(TranslationKeys.ERROR)}: {message[:50]}...")
     
     def _show_success_message(self, message):
         """显示成功消息"""
-        messagebox.showinfo("成功", message)
+        messagebox.showinfo(_(TranslationKeys.OK), message)
         if self.status_bar:
-            self.status_bar.config(text="操作成功完成")
+            self.status_bar.config(text=_(TranslationKeys.ENCRYPTION_COMPLETED))
     
     def encrypt(self):
         """加密文件 - 改进版，增强错误处理和密码验证"""
@@ -330,35 +415,35 @@ class CipherGUI:
             
             # 验证输入
             if not input_file:
-                self._show_error_message("请输入要加密的文件路径")
+                self._show_error_message(_("请输入要加密的文件路径"))
                 return
             
             if not output_dir:
-                self._show_error_message("请输入输出目录路径")
+                self._show_error_message(_("请输入输出目录路径"))
                 return
             
             # 检查文件是否存在
             if not os.path.exists(input_file):
-                self._show_error_message(f"文件不存在: {input_file}")
+                self._show_error_message(_(TranslationKeys.ERROR_FILE_NOT_FOUND, path=input_file))
                 return
             
             # 对于密码模式，验证密码强度
             if algorithm == "AES256" and key_type == "password":
                 if not password:
-                    self._show_error_message("密码模式需要输入密码")
+                    self._show_error_message(_("密码模式需要输入密码"))
                     return
                 
                 # 验证密码强度
                 is_valid, msg = self._validate_password_strength(password)
                 if not is_valid:
-                    self._show_error_message(f"密码强度不足: {msg}")
+                    self._show_error_message(msg)
                     return
             
             # 创建输出目录
             try:
                 os.makedirs(output_dir, exist_ok=True)
             except PermissionError as e:
-                self._show_error_message(f"无法创建输出目录: {e}")
+                self._show_error_message(_(TranslationKeys.ERROR_PERMISSION_DENIED))
                 return
             
             # 读取文件
@@ -366,7 +451,7 @@ class CipherGUI:
                 with open(input_file, 'rb') as f:
                     plaintext = f.read()
             except IOError as e:
-                self._show_error_message(f"读取文件失败: {e}")
+                self._show_error_message(_("读取文件失败: {error}", error=str(e)))
                 return
             
             # 获取算法实例
@@ -391,7 +476,7 @@ class CipherGUI:
                             password=password
                         )
             except ValueError as e:
-                self._show_error_message(f"加密过程出错: {e}")
+                self._show_error_message(_("加密过程出错: {error}", error=str(e)))
                 return
             
             # 构建输出文件路径
@@ -438,31 +523,25 @@ class CipherGUI:
                 pass
             
             # 显示成功消息
-            message = f"加密完成！\n密文文件：{output_file}\n"
-            if result.key_type == self._KeyType.RANDOM:
-                message += f"密钥文件：{key_file}\n"
-            else:
-                message += "密码模式：请妥善保管密码\n"
-
-            message += f"算法：{algorithm}\n密钥类型：{key_type}"
+            message = _(TranslationKeys.SUCCESS_ENCRYPTION,
+                       cipher_file=output_file,
+                       key_file=key_file if result.key_type == self._KeyType.RANDOM else _("密码模式：请妥善保管密码"),
+                       algorithm=algorithm,
+                       key_type=key_type)
+            
             self._show_success_message(message)
-            self.status_bar.config(text=f"加密完成：{base_name}")
+            self.status_bar.config(text=_(TranslationKeys.ENCRYPTION_COMPLETED))
             
         except FileNotFoundError as e:
-            messagebox.showerror("错误", f"文件未找到：{str(e)}")
-            self.status_bar.config(text=f"文件未找到：{os.path.basename(str(e))}")
+            self._show_error_message(_(TranslationKeys.ERROR_FILE_NOT_FOUND, path=str(e)))
         except PermissionError as e:
-            messagebox.showerror("错误", f"权限错误：{str(e)}")
-            self.status_bar.config(text="权限错误，无法访问文件")
+            self._show_error_message(_(TranslationKeys.ERROR_PERMISSION_DENIED))
         except IOError as e:
-            messagebox.showerror("错误", f"文件读写错误：{str(e)}")
-            self.status_bar.config(text="文件读写错误")
+            self._show_error_message(_("文件读写错误: {error}", error=str(e)))
         except ValueError as e:
-            messagebox.showerror("错误", f"参数错误：{str(e)}")
-            self.status_bar.config(text=f"参数错误：{str(e)}")
+            self._show_error_message(_("参数错误: {error}", error=str(e)))
         except Exception as e:
-            messagebox.showerror("错误", f"加密失败：{str(e)}")
-            self.status_bar.config(text=f"加密失败：{str(e)}")
+            self._show_error_message(_(TranslationKeys.ERROR_ENCRYPTION_FAILED, error=str(e)))
     
     def decrypt(self):
         """解密文件 - 改进版，增强错误处理和验证"""
@@ -477,23 +556,23 @@ class CipherGUI:
             
             # 验证输入
             if not input_file:
-                self._show_error_message("请输入要解密的密文文件路径")
+                self._show_error_message(_("请输入要解密的密文文件路径"))
                 return
             
             if not output_dir:
-                self._show_error_message("请输入输出目录路径")
+                self._show_error_message(_("请输入输出目录路径"))
                 return
             
             # 检查文件是否存在
             if not os.path.exists(input_file):
-                self._show_error_message(f"文件不存在: {input_file}")
+                self._show_error_message(_(TranslationKeys.ERROR_FILE_NOT_FOUND, path=input_file))
                 return
             
             # 检测算法
             try:
                 algorithm_type = self._FileFormatHandler.detect_algorithm(input_file)
             except Exception as e:
-                self._show_error_message(f"检测算法失败: {e}")
+                self._show_error_message(_("检测算法失败: {error}", error=str(e)))
                 return
             
             # 读取文件
@@ -502,18 +581,18 @@ class CipherGUI:
                 try:
                     ciphertext, _ = self._FileFormatHandler.read_otp_file(input_file)
                 except ValueError as e:
-                    self._show_error_message(f"读取OTP文件失败: {e}")
+                    self._show_error_message(_("读取OTP文件失败: {error}", error=str(e)))
                     return
                 
                 # 获取密钥文件路径
                 key_file = self.entry_key_file.get().strip()
                 if not key_file:
-                    self._show_error_message("OTP解密需要密钥文件")
+                    self._show_error_message(_("OTP解密需要密钥文件"))
                     return
                 
                 # 检查密钥文件是否存在
                 if not os.path.exists(key_file):
-                    self._show_error_message(f"密钥文件不存在: {key_file}")
+                    self._show_error_message(_(TranslationKeys.ERROR_FILE_NOT_FOUND, path=key_file))
                     return
                 
                 # 读取密钥
@@ -522,7 +601,7 @@ class CipherGUI:
                         key_hex = f.read().strip()
                         key = bytes.fromhex(key_hex)
                 except (FileNotFoundError, ValueError) as e:
-                    self._show_error_message(f"读取密钥文件失败: {e}")
+                    self._show_error_message(_("读取密钥文件失败: {error}", error=str(e)))
                     return
                 
                 # 解密
@@ -530,7 +609,7 @@ class CipherGUI:
                 try:
                     result = cipher_algorithm.decrypt(ciphertext, key=key)
                 except ValueError as e:
-                    self._show_error_message(f"OTP解密失败: {e}")
+                    self._show_error_message(_("OTP解密失败: {error}", error=str(e)))
                     return
                 
             else:  # AES256
@@ -539,7 +618,7 @@ class CipherGUI:
                     with open(input_file, 'rb') as f:
                         header = f.read(4)
                 except IOError as e:
-                    self._show_error_message(f"读取文件失败: {e}")
+                    self._show_error_message(_("读取文件失败: {error}", error=str(e)))
                     return
                 
                 if header == b'AES\x01':
@@ -547,13 +626,13 @@ class CipherGUI:
                     try:
                         ciphertext, salt, iv, tag, _ = self._FileFormatHandler.read_aes_file_with_salt(input_file)
                     except ValueError as e:
-                        self._show_error_message(f"读取AES密码格式文件失败: {e}")
+                        self._show_error_message(_("读取AES密码格式文件失败: {error}", error=str(e)))
                         return
                     
                     # 密码模式需要密码
                     password = self.entry_decrypt_password.get().strip()
                     if not password:
-                        self._show_error_message("AES密码解密需要密码")
+                        self._show_error_message(_("AES密码解密需要密码"))
                         return
                     
                     cipher_algorithm = self._get_algorithm(algorithm_type)
@@ -567,7 +646,7 @@ class CipherGUI:
                             tag=tag
                         )
                     except ValueError as e:
-                        self._show_error_message(f"AES密码解密失败: {e}")
+                        self._show_error_message(_("AES密码解密失败: {error}", error=str(e)))
                         return
                         
                 else:
@@ -575,7 +654,7 @@ class CipherGUI:
                     try:
                         ciphertext, iv, tag, _ = self._FileFormatHandler.read_aes_file(input_file)
                     except ValueError as e:
-                        self._show_error_message(f"读取AES文件失败: {e}")
+                        self._show_error_message(_("读取AES文件失败: {error}", error=str(e)))
                         return
                     
                     # 判断密钥类型（通过UI状态）
@@ -586,19 +665,19 @@ class CipherGUI:
                         # 随机密钥模式
                         key_file = self.entry_key_file.get().strip()
                         if not key_file:
-                            self._show_error_message("AES随机密钥解密需要密钥文件")
+                            self._show_error_message(_("AES随机密钥解密需要密钥文件"))
                             return
                         
                         # 检查密钥文件是否存在
                         if not os.path.exists(key_file):
-                            self._show_error_message(f"密钥文件不存在: {key_file}")
+                            self._show_error_message(_(TranslationKeys.ERROR_FILE_NOT_FOUND, path=key_file))
                             return
                         
                         try:
                             with open(key_file, 'rb') as f:
                                 key = f.read()
                         except IOError as e:
-                            self._show_error_message(f"读取密钥文件失败: {e}")
+                            self._show_error_message(_("读取密钥文件失败: {error}", error=str(e)))
                             return
                         
                         cipher_algorithm = self._get_algorithm(algorithm_type)
@@ -611,18 +690,18 @@ class CipherGUI:
                                 tag=tag
                             )
                         except ValueError as e:
-                            self._show_error_message(f"AES随机密钥解密失败: {e}")
+                            self._show_error_message(_("AES随机密钥解密失败: {error}", error=str(e)))
                             return
                     else:
                         # 用户选择了密码模式，但文件是随机密钥格式
-                        self._show_error_message("该文件是随机密钥格式，请使用密钥文件解密")
+                        self._show_error_message(_("该文件是随机密钥格式，请使用密钥文件解密"))
                         return
             
             # 创建输出目录
             try:
                 os.makedirs(output_dir, exist_ok=True)
             except PermissionError as e:
-                self._show_error_message(f"无法创建输出目录: {e}")
+                self._show_error_message(_(TranslationKeys.ERROR_PERMISSION_DENIED))
                 return
             
             # 构建输出文件名
@@ -637,18 +716,74 @@ class CipherGUI:
                 with open(output_file, 'wb') as f:
                     f.write(result.plaintext)
             except IOError as e:
-                self._show_error_message(f"保存解密文件失败: {e}")
+                self._show_error_message(_("保存解密文件失败: {error}", error=str(e)))
                 return
             
             # 显示成功消息
-            message = f"解密完成！\n明文文件：{output_file}\n算法：{algorithm_type.value}"
+            message = _(TranslationKeys.SUCCESS_DECRYPTION,
+                       plaintext_file=output_file,
+                       algorithm=algorithm_type.value)
+            
             self._show_success_message(message)
-            self.status_bar.config(text=f"解密完成：{base_name}")
+            self.status_bar.config(text=_(TranslationKeys.DECRYPTION_COMPLETED))
             
         except Exception as e:
-            self._show_error_message(f"解密失败: {e}")
-            if self.status_bar:
-                self.status_bar.config(text=f"解密失败: {str(e)[:50]}...")
+            self._show_error_message(_(TranslationKeys.ERROR_DECRYPTION_FAILED, error=str(e)))
+    
+    def _open_settings(self):
+        """打开设置对话框"""
+        # 这是一个简化的设置对话框，实际项目中可以更复杂
+        settings_window = tk.Toplevel(self.root)
+        settings_window.title(_("设置"))
+        settings_window.geometry("400x300")
+        
+        # 这里可以添加各种设置选项
+        tk.Label(settings_window, text=_("设置功能正在开发中...")).pack(pady=20)
+        
+        # 关闭按钮
+        tk.Button(settings_window, text=_("关闭"), command=settings_window.destroy).pack(pady=10)
+    
+    def _change_language(self, language_code):
+        """更改界面语言"""
+        try:
+            self.translator.set_language(language_code)
+            # 重新加载界面
+            self._reload_ui()
+        except Exception as e:
+            self._show_error_message(_("更改语言失败: {error}", error=str(e)))
+    
+    def _reload_ui(self):
+        """重新加载UI以应用新的语言设置"""
+        # 销毁当前UI
+        for widget in self.root.winfo_children():
+            widget.destroy()
+        
+        # 重新创建菜单
+        self._create_menu_bar()
+        
+        # 重新创建UI
+        self._init_ui_variables(
+            self.config_manager.get_default_algorithm(),
+            self.config_manager.get_default_key_type()
+        )
+        self.setup_complete_ui()
+        self._apply_configuration()
+        self.update_ui_state()
+        
+        # 更新窗口标题
+        self.root.title(_(TranslationKeys.APP_TITLE))
+    
+    def _show_about(self):
+        """显示关于对话框"""
+        about_text = f"""Cipher - 文件加密工具
+版本: 1.0 (支持多语言和配置)
+支持算法: OTP, AES256-GCM
+语言: {self.translator.get_current_language_display_name()}
+配置文件: {self.config_manager.config_file}
+        
+版权所有 © 2026 miniCipher项目"""
+        
+        messagebox.showinfo(_("关于"), about_text)
     
     def run(self):
         """运行GUI"""

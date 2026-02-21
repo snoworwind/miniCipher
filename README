@@ -3,6 +3,20 @@ MINICIPHER - 文件加密/解密工具
 
 这是一个主要由DeepSeek开发的文件加密/解密GUI工具，支持多种加密算法。本工具提供简单易用的图形界面，让用户可以轻松地对文件进行加密和解密操作。
 
+## 新功能亮点
+
+* **配置文件系统**：支持用户自定义初始设置和默认文件夹
+  - 跨平台配置文件管理（Windows、macOS、Linux）
+  - 可配置默认加密算法和密钥类型
+  - 记住上次使用的文件夹
+  - 自定义密码强度要求
+
+* **多语言支持**：支持中文和英文界面
+  - 简体中文 (zh_CN) - 默认语言
+  - 英文 (en_US)
+  - 可通过菜单动态切换语言
+  - 完整的国际化字符串管理
+
 项目特点
 =========
 
@@ -16,6 +30,8 @@ MINICIPHER - 文件加密/解密工具
 
 * 完整功能：
   - 图形用户界面（基于tkinter）
+  - 配置文件管理（跨平台）
+  - 多语言支持（中英文）
   - 文件拖放支持（部分系统）
   - 密码强度验证
   - 完整的错误处理和用户反馈
@@ -32,16 +48,78 @@ MINICIPHER - 文件加密/解密工具
 =========
 
 1. 安装依赖：
+   ```bash
    pip install -r requirements.txt
+   ```
 
 2. 运行程序：
+   ```bash
    python main.py
+   ```
 
 3. 或者使用构建的可执行文件：
+   ```bash
    python build.py --all
+   ```
    然后运行：
    * Windows: launch.bat
    * macOS/Linux: ./launch.command 或 ./dist/Cipher
+
+配置文件系统
+=============
+
+miniCipher现在支持配置文件系统，配置文件位于：
+
+* **Windows**: `%APPDATA%\miniCipher\config.json`
+* **macOS**: `~/Library/Application Support/miniCipher/config.json`
+* **Linux/Unix**: `~/.config/miniCipher/config.json`
+
+### 配置选项
+
+配置文件支持以下选项：
+
+```json
+{
+  "version": "1.0",
+  "ui": {
+    "language": "zh_CN",        // 界面语言：zh_CN 或 en_US
+    "theme": "default",
+    "window_width": 800,
+    "window_height": 600
+  },
+  "encryption": {
+    "default_algorithm": "OTP", // 默认算法：OTP 或 AES256
+    "default_key_type": "random", // 默认密钥类型：random 或 password
+    "password_min_length": 8,   // 密码最小长度
+    "require_strong_password": true // 是否要求强密码
+  },
+  "paths": {
+    "default_input_dir": "",    // 默认输入目录
+    "default_output_dir": "",   // 默认输出目录
+    "remember_last_folder": true, // 是否记住上次使用的文件夹
+    "last_input_folder": "",    // 上次使用的输入文件夹
+    "last_output_folder": ""    // 上次使用的输出文件夹
+  }
+}
+```
+
+多语言支持
+===========
+
+### 切换语言
+
+1. 通过菜单栏的"语言"菜单切换：
+   - "简体中文"：切换到中文界面
+   - "English"：切换到英文界面
+
+2. 语言设置会自动保存到配置文件，下次启动时保持所选语言。
+
+### 支持的语言
+
+| 语言代码 | 语言名称 | 状态 |
+|----------|----------|------|
+| zh_CN    | 简体中文 | ✅ 完整支持 |
+| en_US    | 英文     | ✅ 完整支持 |
 
 使用方法
 =========
@@ -81,30 +159,49 @@ MINICIPHER - 文件加密/解密工具
 测试
 ====
 
-项目包含完整的单元测试，确保功能正确性：
+项目包含完整的单元测试和集成测试，确保功能正确性：
 
-运行测试：python test_cipher.py
+### 运行核心加密测试：
+```bash
+python test_cipher.py
+```
 
-测试包括：
+### 运行集成测试（配置文件+多语言）：
+```bash
+python test_integration_fixed.py
+```
+
+### 运行简单语言测试：
+```bash
+python test_simple.py
+```
+
+### 测试包括：
 * OTP加密解密测试
 * AES256随机密钥加密解密测试
 * AES256密码加密解密测试
 * 文件格式处理测试
 * 向后兼容性测试
+* 配置文件系统测试
+* 多语言支持测试
+* GUI集成测试
 
 构建可执行文件
 ===============
 
 使用PyInstaller打包为独立可执行文件：
 
-运行构建脚本：python build.py --all
+运行构建脚本：
+```bash
+python build.py --all
+```
 
 构建选项：
-* --install-deps：安装依赖
-* --build：执行构建
-* --clean：清理旧的构建文件
-* --test：测试构建结果
-* --all：完整流程（安装依赖、构建、测试）
+* `--install-deps`：安装依赖
+* `--build`：执行构建
+* `--clean`：清理旧的构建文件
+* `--test`：测试构建结果
+* `--all`：完整流程（安装依赖、构建、测试）
 
 构建完成后，可以使用以下启动脚本：
 * Windows: launch.bat
@@ -168,6 +265,43 @@ act
 act -W .github/workflows/release.yml
 ```
 
+项目结构
+=========
+
+```
+miniCipher/
+├── main.py                    # 主程序入口
+├── cipher_gui.py              # GUI主界面（支持多语言）
+├── cipher_algorithms.py       # 加密算法实现
+├── config_manager.py          # 配置文件管理系统
+├── translations.py            # 多语言翻译模块
+├── requirements.txt           # Python依赖
+├── build.py                   # 构建脚本
+├── test_cipher.py             # 核心加密测试
+├── test_integration_fixed.py  # 集成测试
+├── test_simple.py             # 简单语言测试
+├── launch.bat                 # Windows启动脚本
+├── launch.command             # macOS/Linux启动脚本
+├── README                     # 说明文档
+└── LICENSE                    # 许可证文件
+```
+
+开发指南
+=========
+
+### 添加新语言
+
+1. 在 `translations.py` 的 `TranslationKeys` 枚举中添加新翻译键
+2. 在 `_get_chinese_translations()` 和 `_get_english_translations()` 方法中添加翻译
+3. 在 `Language` 枚举中添加新语言代码
+4. 在 `get_available_languages()` 和 `get_current_language_display_name()` 中添加语言显示名称
+
+### 添加新配置选项
+
+1. 在 `config_manager.py` 的 `_get_default_config()` 方法中添加默认值
+2. 在 `ConfigurationManager` 类中添加相应的getter/setter方法
+3. 在GUI中实现相应的设置界面
+
 许可证
 ======
 
@@ -177,13 +311,20 @@ act -W .github/workflows/release.yml
 ========
 
 * OTP加密的密钥长度必须等于文件长度，请妥善保管密钥文件
-* AES256密码模式要求密码至少8位，包含大小写字母和数字
+* AES256密码模式要求密码至少8位，包含大小写字母和数字（可配置）
 * 请勿丢失密钥文件或忘记密码，否则无法解密文件
 * 建议对重要文件进行备份
+* 配置文件会自动创建，首次运行时使用默认配置
 
 版本信息
 ========
 
-当前版本：稳定版 1.0 (支持自动构建)
+当前版本：1.0 (支持配置系统和多语言)
+主要新功能：
+1. 配置文件系统 - 支持用户自定义设置
+2. 多语言支持 - 中英文界面切换
+3. 增强的错误处理和用户体验
+
 最后更新：2026年2月
 作者：snoworwind
+GitHub: https://github.com/snoworwind/miniCipher
