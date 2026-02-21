@@ -267,6 +267,75 @@ jobs:
         echo "Release notes generated:"
         cat release-notes.md
 
+    - name: Debug permissions and tag info
+      shell: bash
+      run: |
+        echo "=== Debug Information ==="
+        echo "Tag: ${{ github.ref_name }}"
+        echo "Repository: ${{ github.repository }}"
+        echo "Workflow run ID: ${{ github.run_id }}"
+        echo "Commit SHA: ${{ github.sha }}"
+        echo "========================"
+        
+        # Test GitHub API permissions
+        echo "Testing GitHub API permissions..."
+        API_RESPONSE=$(curl -s -w "%{http_code}" -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
+          -H "Accept: application/vnd.github.v3+json" \
+          "https://api.github.com/repos/${{ github.repository }}" || echo "API call failed")
+        
+        HTTP_CODE=$(echo "$API_RESPONSE" | tail -1)
+        API_CONTENT=$(echo "$API_RESPONSE" | head -n -1)
+        
+        echo "GitHub API response code: $HTTP_CODE"
+        if [ "$HTTP_CODE" = "200" ]; then
+          echo "✓ GitHub API access successful"
+          # Try to get repository permissions
+          PERMISSIONS=$(echo "$API_CONTENT" | grep -o '"permissions":[^}]*' || echo "No permissions info")
+          echo "Repository permissions: $PERMISSIONS"
+        else
+          echo "⚠️  GitHub API access failed with code: $HTTP_CODE"
+          echo "Response content:"
+          echo "$API_CONTENT" | head -10
+        fi
+        
+        # Check if tag already has a release
+        echo ""
+        echo "Checking if tag has existing release..."
+        TAG="${{ github.ref_name }}"
+        if [ -n "$TAG" ]; then
+          echo "Checking GitHub API for tag $TAG..."
+          # Try to get release info for this tag
+          RELEASE_RESPONSE=$(curl -s -w "%{http_code}" -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
+            -H "Accept: application/vnd.github.v3+json" \
+            "https://api.github.com/repos/${{ github.repository }}/releases/tags/$TAG" || echo "API call failed")
+          
+          RELEASE_HTTP_CODE=$(echo "$RELEASE_RESPONSE" | tail -1)
+          RELEASE_CONTENT=$(echo "$RELEASE_RESPONSE" | head -n -1)
+          
+          echo "Release API response code: $RELEASE_HTTP_CODE"
+          if [ "$RELEASE_HTTP_CODE" = "404" ]; then
+            echo "✓ Tag $TAG does not have an existing release"
+          elif [ "$RELEASE_HTTP_CODE" = "200" ]; then
+            echo "⚠️  Tag $TAG already has a release!"
+            echo "Release info:"
+            echo "$RELEASE_CONTENT" | head -5
+            echo "You may need to delete the existing release or use a new tag."
+          else
+            echo "⚠️  Release API returned unexpected code: $RELEASE_HTTP_CODE"
+            echo "Response content:"
+            echo "$RELEASE_CONTENT" | head -10
+          fi
+        fi
+        
+        # Check workflow permissions
+        echo ""
+        echo "=== Workflow Permission Recommendations ==="
+        echo "If you see 403 errors, check your repository settings:"
+        echo "1. Go to Settings → Actions → General"
+        echo "2. Under 'Workflow permissions', select 'Read and write permissions'"
+        echo "3. Make sure 'Allow GitHub Actions to create and approve pull requests' is enabled"
+        echo "==========================================="
+
     - name: Create Release
       uses: softprops/action-gh-release@v1
       env:
