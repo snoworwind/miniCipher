@@ -27,7 +27,6 @@
 ### 🖥️ 用户界面 / User Interface
 - 图形用户界面 (基于tkinter) / Graphical User Interface (based on tkinter)
 - 中英文双语支持 / Chinese and English language support
-- 文件拖放操作 / File drag-and-drop support
 - 配置文件管理 / Configuration file management
 
 ### ⚙️ 高级功能 / Advanced Features
