@@ -427,6 +427,45 @@ jobs:
         echo "3. Make sure 'Allow GitHub Actions to create and approve pull requests' is enabled"
         echo "==========================================="
 
+    - name: Delete existing release if exists
+      shell: bash
+      run: |
+        TAG="${{ github.ref_name }}"
+        if [ -n "$TAG" ]; then
+          # 检查release是否存在
+          echo "Checking if release exists for tag: $TAG"
+          RESPONSE=$(curl -s -w "%{http_code}" \
+            -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
+            -H "Accept: application/vnd.github.v3+json" \
+            "https://api.github.com/repos/${{ github.repository }}/releases/tags/$TAG" 2>/dev/null || echo "API call failed")
+          
+          HTTP_CODE=$(echo "$RESPONSE" | tail -1)
+          echo "GitHub API response code: $HTTP_CODE"
+          
+          if [ "$HTTP_CODE" = "200" ]; then
+            echo "Found existing release for tag $TAG, deleting..."
+            RELEASE_ID=$(echo "$RESPONSE" | head -n -1 | grep -o '"id":[0-9]*' | cut -d: -f2)
+            echo "Release ID: $RELEASE_ID"
+            
+            # 删除release
+            DELETE_RESPONSE=$(curl -s -w "%{http_code}" -X DELETE \
+              -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
+              -H "Accept: application/vnd.github.v3+json" \
+              "https://api.github.com/repos/${{ github.repository }}/releases/$RELEASE_ID" 2>/dev/null || echo "Delete API call failed")
+            
+            DELETE_CODE=$(echo "$DELETE_RESPONSE" | tail -1)
+            if [ "$DELETE_CODE" = "204" ]; then
+              echo "✓ Existing release deleted successfully"
+            else
+              echo "⚠️ Failed to delete existing release, but will continue (response code: $DELETE_CODE)"
+            fi
+          else
+            echo "No existing release found for tag $TAG"
+          fi
+        else
+          echo "No tag specified, skipping release check"
+        fi
+
     - name: Create Release
       uses: softprops/action-gh-release@v2
       env:
