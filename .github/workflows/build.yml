@@ -11,8 +11,6 @@ jobs:
   build:
     strategy:
       matrix:
-        os: [windows-latest, macos-latest, ubuntu-latest]
-        python-version: ['3.11']
         include:
           # Windows configuration
           - os: windows-latest
@@ -20,12 +18,18 @@ jobs:
             platform: windows
             architecture: x64
             output_name: Cipher-windows-x64.exe
-          # macOS configuration
+          # macOS configuration (Intel)
           - os: macos-latest
             python-version: '3.11'
             platform: macos
             architecture: x64
             output_name: Cipher-macos-x64
+          # macOS configuration (Apple Silicon)
+          - os: macos-latest
+            python-version: '3.11'
+            platform: macos
+            architecture: arm64
+            output_name: Cipher-macos-arm64
           # Linux configuration
           - os: ubuntu-latest
             python-version: '3.11'
@@ -234,7 +238,7 @@ jobs:
         
         
         if [ -d "artifacts" ]; then
-          find artifacts -name "*.exe" -o -name "Cipher-*" | while read file; do
+          find artifacts \( -name "*.exe" -o -name "Cipher-*" \) | while read file; do
             size=$(stat -c%s "$file" 2>/dev/null || stat -f%z "$file" 2>/dev/null || echo "unknown")
             echo "  - $(basename "$file") ($size bytes)"
           done

@@ -17,12 +17,18 @@ jobs:
             architecture: x64
             output_name: Cipher-windows-x64.exe
             asset_name: cipher-windows-x64.exe
-          # macOS configuration
+          # macOS configuration (Intel)
           - os: macos-latest
             platform: macos
             architecture: x64
             output_name: Cipher-macos-x64
             asset_name: cipher-macos-x64
+          # macOS configuration (Apple Silicon)
+          - os: macos-latest
+            platform: macos
+            architecture: arm64
+            output_name: Cipher-macos-arm64
+            asset_name: cipher-macos-arm64
           # Linux configuration
           - os: ubuntu-latest
             platform: linux
@@ -318,9 +324,13 @@ jobs:
         echo "1. Download `cipher-windows-x64.exe`" >> release-notes.md
         echo "2. Double-click to run" >> release-notes.md
         echo "" >> release-notes.md
-        echo "### macOS" >> release-notes.md
+        echo "### macOS (Intel)" >> release-notes.md
         echo "1. Download `cipher-macos-x64`" >> release-notes.md
         echo "2. Right-click the file and select 'Open', or run `./cipher-macos-x64` from terminal" >> release-notes.md
+        echo "" >> release-notes.md
+        echo "### macOS (Apple Silicon)" >> release-notes.md
+        echo "1. Download `cipher-macos-arm64`" >> release-notes.md
+        echo "2. Right-click the file and select 'Open', or run `./cipher-macos-arm64` from terminal" >> release-notes.md
         echo "" >> release-notes.md
         echo "### Linux" >> release-notes.md
         echo "1. Download `cipher-linux-x64`" >> release-notes.md
