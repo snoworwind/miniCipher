@@ -93,6 +93,21 @@ def update_spec_file():
         # Linux/Mac paths: no escaping needed
         project_dir_escaped = project_dir_str
     
+    # Platform-specific configurations
+    system = platform.system()
+    machine = platform.machine()
+    
+    if system == "Darwin":
+        # macOS需要特殊处理，允许未签名应用运行
+        codesign_config = "codesign_identity='-',"
+        argv_emulation = "argv_emulation=True,"
+        target_arch = f"target_arch='{machine}',"
+        print(f"macOS detected, using platform-specific config for {machine}")
+    else:
+        codesign_config = "codesign_identity=None,"
+        argv_emulation = "argv_emulation=False,"
+        target_arch = "target_arch=None,"
+    
     spec_content = f'''# -*- mode: python ; coding: utf-8 -*-
 # Cipher - PyInstaller spec file
 # Auto-generated, includes all necessary dependencies and configuration
@@ -159,9 +174,9 @@ exe = EXE(
     runtime_tmpdir=None,
     console=False,
     disable_windowed_traceback=False,
-    argv_emulation=False,
-    target_arch=None,
-    codesign_identity=None,
+    {argv_emulation}
+    {target_arch}
+    {codesign_config}
     entitlements_file=None,
 )
 
@@ -276,8 +291,17 @@ def run_build(clean=False):
     except subprocess.CalledProcessError as e:
         print(f"Build failed: {e}")
         if e.stderr:
-            print("Error output:")
-            print(e.stderr[:500])  # Show only first 500 characters
+            print("完整错误输出:")
+            print(e.stderr)
+            # 保存错误日志到文件以便分析
+            error_log = project_dir / "build-error.log"
+            with open(error_log, 'w', encoding='utf-8') as f:
+                f.write(f"PyInstaller build failed with exit code {e.returncode}\n")
+                f.write(f"Command: {' '.join(cmd)}\n")
+                f.write(f"Error output:\n{e.stderr}\n")
+                if e.stdout:
+                    f.write(f"Standard output:\n{e.stdout}\n")
+            print(f"错误日志已保存到: {error_log}")
         return False
     except FileNotFoundError:
         print("Error: pyinstaller command not found")
