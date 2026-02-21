@@ -3,8 +3,8 @@ name: Release
 on:
   push:
     tags:
-      - 'v*'  # 匹配v开头的tag，如v1.0.0, v2.1.0-beta.1
-  workflow_dispatch:  # 允许手动触发
+      - 'v*'  # Match tags starting with v, e.g., v1.0.0, v2.1.0-beta.1
+  workflow_dispatch:  # Allow manual trigger
 
 jobs:
   build-all-platforms:
@@ -34,18 +34,18 @@ jobs:
     - name: Checkout repository
       uses: actions/checkout@v4
       with:
-        fetch-depth: 0  # 获取所有历史记录以便git describe
+        fetch-depth: 0  # Get full history for git describe
 
     - name: Get version from tag
       id: get_version
       run: |
-        # 从git tag获取版本
+        # Get version from git tag
         if [ -n "${{ github.ref_name }}" ]; then
           VERSION="${{ github.ref_name }}"
           echo "VERSION=$VERSION" >> $GITHUB_OUTPUT
           echo "TAG_NAME=$VERSION" >> $GITHUB_OUTPUT
           
-          # 清理版本号用于文件名
+          # Clean version for filenames
           CLEAN_VERSION=$(echo "$VERSION" | sed 's/^v//' | sed 's/[^a-zA-Z0-9._-]/_/g')
           echo "CLEAN_VERSION=$CLEAN_VERSION" >> $GITHUB_OUTPUT
           
@@ -63,7 +63,7 @@ jobs:
 
     - name: Generate build info
       run: |
-        # 生成详细的构建信息
+        # Generate detailed build information
         echo "=== BUILD INFORMATION ==="
         echo "Tag: ${{ steps.get_version.outputs.VERSION }}"
         echo "Platform: ${{ matrix.platform }}-${{ matrix.architecture }}"
@@ -71,7 +71,7 @@ jobs:
         echo "Commit: $(git rev-parse HEAD)"
         echo "========================="
         
-        # 创建构建信息文件
+        # Create build information file
         cat > build-info-${{ matrix.platform }}.txt << EOF
         MiniCipher Build Information
         ============================
@@ -97,7 +97,7 @@ jobs:
         echo "Building ${{ matrix.platform }} version..."
         python build.py --clean --build --system-python
         
-        # 验证构建
+        # Verify build
         if [ "${{ matrix.platform }}" = "windows" ]; then
           if [ ! -f "dist/Cipher.exe" ]; then
             echo "ERROR: Cipher.exe not found!"
@@ -123,7 +123,7 @@ jobs:
       run: |
         echo "Preparing release assets..."
         
-        # 重命名文件
+        # Rename files
         if [ "${{ matrix.platform }}" = "windows" ]; then
           cp dist/Cipher.exe dist/${{ matrix.output_name }}
           RELEASE_FILE="dist/${{ matrix.output_name }}"
@@ -133,7 +133,7 @@ jobs:
           RELEASE_FILE="dist/${{ matrix.output_name }}"
         fi
         
-        # 计算SHA256
+        # Calculate SHA256
         if command -v sha256sum > /dev/null 2>&1; then
           SHA256=$(sha256sum "$RELEASE_FILE" | cut -d' ' -f1)
         elif command -v shasum > /dev/null 2>&1; then
@@ -145,10 +145,10 @@ jobs:
         echo "SHA256: $SHA256"
         echo "File: $RELEASE_FILE"
         
-        # 更新构建信息文件
+        # Update build information file
         echo "${{ matrix.output_name }}: $SHA256" >> build-info-${{ matrix.platform }}.txt
         
-        # 创建最终的版本信息文件
+        # Create final version information file
         cat > release-${{ matrix.platform }}.txt << EOF
         MiniCipher Release
         ==================
@@ -166,7 +166,7 @@ jobs:
         Source code: https://github.com/${{ github.repository }}
         EOF
         
-        # 显示最终文件列表
+        # Show final file list
         echo "Release assets ready:"
         ls -la dist/
         echo ""
@@ -202,7 +202,7 @@ jobs:
       run: |
         echo "Generating release notes..."
         
-        # 获取最近提交信息
+        # Get latest commit information
         LATEST_TAG="${{ github.ref_name }}"
         PREVIOUS_TAG=$(git describe --tags --abbrev=0 "$LATEST_TAG^" 2>/dev/null || echo "")
         
@@ -213,7 +213,7 @@ jobs:
         echo "Platform | File | SHA256" >> release-notes.md
         echo "-------- | ---- | ------" >> release-notes.md
         
-        # 从各个构建信息文件中提取信息
+        # Extract information from build information files
         for info_file in release-artifacts/**/build-info-*.txt; do
           if [ -f "$info_file" ]; then
             PLATFORM=$(basename "$info_file" | sed 's/build-info-//' | sed 's/.txt//')
@@ -275,7 +275,7 @@ jobs:
         release_name: MiniCipher ${{ github.ref_name }}
         body_path: release-notes.md
         draft: false
-        prerelease: ${{ contains(github.ref_name, '-') }}  # 如果tag包含'-'，标记为预发布
+        prerelease: ${{ contains(github.ref_name, '-') }}  # Mark as prerelease if tag contains '-'
         files: |
           release-artifacts/**/*.exe
           release-artifacts/**/Cipher-*
