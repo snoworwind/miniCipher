@@ -1,2 +1,12 @@
 # 加密/解密工具依赖包
+# 运行时依赖
 cryptography>=42.0.0
+
+# 构建工具依赖（可选，用于打包可执行文件）
+pyinstaller>=6.0.0
+
+# 标准库依赖（通常Python自带，部分系统可能需要单独安装）
+# - tkinter: 图形界面库
+#   macOS: brew install python-tk
+#   Ubuntu/Debian: sudo apt-get install python3-tk
+# - 其他: enum, dataclasses, typing, hashlib, os, sys, secrets, pathlib, tempfile, subprocess, platform, shutil, argparse
