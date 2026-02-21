@@ -11,15 +11,31 @@ jobs:
   build:
     strategy:
       matrix:
-        os: [windows-latest]
-        python-version: ['3.11']
         include:
-          # Main build configuration - Windows only
+          # Windows configuration
           - os: windows-latest
             python-version: '3.11'
             platform: windows
             architecture: x64
             output_name: Cipher-windows-x64.exe
+          # macOS configuration (Intel)
+          - os: macos-latest
+            python-version: '3.11'
+            platform: macos
+            architecture: x64
+            output_name: Cipher-macos-x64
+          # macOS configuration (Apple Silicon)
+          - os: macos-latest
+            python-version: '3.11'
+            platform: macos
+            architecture: arm64
+            output_name: Cipher-macos-arm64
+          # Linux configuration
+          - os: ubuntu-latest
+            python-version: '3.11'
+            platform: linux
+            architecture: x64
+            output_name: Cipher-linux-x64
 
     env:
       PYTHONIOENCODING: utf-8
@@ -65,6 +81,29 @@ jobs:
         python --version
         pip --version
 
+    - name: Install system dependencies
+      shell: bash
+      run: |
+        echo "Installing system dependencies for ${{ matrix.platform }}..."
+        
+        case "${{ matrix.platform }}" in
+          macos)
+            echo "Installing tkinter for macOS..."
+            # Check if tkinter is already available
+            python -c "import tkinter" 2>/dev/null || brew install python-tk || echo "Warning: tkinter installation may have failed, continuing..."
+            ;;
+          linux)
+            echo "Installing tkinter for Linux..."
+            sudo apt-get update
+            sudo apt-get install -y python3-tk || echo "Warning: tkinter installation may have failed, continuing..."
+            ;;
+          windows)
+            echo "Windows: tkinter is typically included with Python installation"
+            ;;
+        esac
+        
+        echo "System dependencies installation completed."
+
     - name: Install dependencies
       run: |
         python -m pip install --upgrade pip
@@ -76,15 +115,30 @@ jobs:
         echo "Building on ${{ matrix.platform }} ${{ matrix.architecture }}..."
         python build.py --clean --build --system-python
         
-        # Verify build result
-        if [ -f "dist/Cipher.exe" ]; then
-          echo "Build successful: dist/Cipher.exe"
-          ls -la dist/
-        else
-          echo "ERROR: Cipher.exe not found!"
-          ls -la dist/ || true
-          exit 1
-        fi
+        # Verify build result based on platform
+        echo "Verifying build for ${{ matrix.platform }}..."
+        case "${{ matrix.platform }}" in
+          windows)
+            if [ -f "dist/Cipher.exe" ]; then
+              echo "Build successful: dist/Cipher.exe"
+              ls -la dist/
+            else
+              echo "ERROR: Cipher.exe not found!"
+              ls -la dist/ || true
+              exit 1
+            fi
+            ;;
+          macos|linux)
+            if [ -f "dist/Cipher" ]; then
+              echo "Build successful: dist/Cipher"
+              ls -la dist/
+            else
+              echo "ERROR: Cipher not found!"
+              ls -la dist/ || true
+              exit 1
+            fi
+            ;;
+        esac
 
     - name: Test build
       run: |
@@ -96,8 +150,18 @@ jobs:
       run: |
         echo "Preparing artifact: ${{ matrix.output_name }}"
         
-        # Windows: rename exe file
-        cp dist/Cipher.exe dist/${{ matrix.output_name }}
+        # Copy executable based on platform
+        case "${{ matrix.platform }}" in
+          windows)
+            echo "Copying Windows executable..."
+            cp dist/Cipher.exe dist/${{ matrix.output_name }}
+            ;;
+          macos|linux)
+            echo "Copying macOS/Linux executable..."
+            cp dist/Cipher dist/${{ matrix.output_name }}
+            ;;
+        esac
+        
         echo "Artifact prepared: ${{ matrix.output_name }}"
         
         # Copy version file
@@ -174,7 +238,7 @@ jobs:
         
         
         if [ -d "artifacts" ]; then
-          find artifacts -name "*.exe" -o -name "Cipher-*" | while read file; do
+          find artifacts \( -name "*.exe" -o -name "Cipher-*" \) | while read file; do
             size=$(stat -c%s "$file" 2>/dev/null || stat -f%z "$file" 2>/dev/null || echo "unknown")
             echo "  - $(basename "$file") ($size bytes)"
           done

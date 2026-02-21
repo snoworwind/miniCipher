@@ -11,11 +11,30 @@ jobs:
     strategy:
       matrix:
         include:
+          # Windows configuration
           - os: windows-latest
             platform: windows
             architecture: x64
             output_name: Cipher-windows-x64.exe
             asset_name: cipher-windows-x64.exe
+          # macOS configuration (Intel)
+          - os: macos-latest
+            platform: macos
+            architecture: x64
+            output_name: Cipher-macos-x64
+            asset_name: cipher-macos-x64
+          # macOS configuration (Apple Silicon)
+          - os: macos-latest
+            platform: macos
+            architecture: arm64
+            output_name: Cipher-macos-arm64
+            asset_name: cipher-macos-arm64
+          # Linux configuration
+          - os: ubuntu-latest
+            platform: linux
+            architecture: x64
+            output_name: Cipher-linux-x64
+            asset_name: cipher-linux-x64
 
     env:
       PYTHONIOENCODING: utf-8
@@ -91,6 +110,29 @@ jobs:
         -----------------
         EOF
 
+    - name: Install system dependencies
+      shell: bash
+      run: |
+        echo "Installing system dependencies for ${{ matrix.platform }}..."
+        
+        case "${{ matrix.platform }}" in
+          macos)
+            echo "Installing tkinter for macOS..."
+            # Check if tkinter is already available
+            python -c "import tkinter" 2>/dev/null || brew install python-tk || echo "Warning: tkinter installation may have failed, continuing..."
+            ;;
+          linux)
+            echo "Installing tkinter for Linux..."
+            sudo apt-get update
+            sudo apt-get install -y python3-tk || echo "Warning: tkinter installation may have failed, continuing..."
+            ;;
+          windows)
+            echo "Windows: tkinter is typically included with Python installation"
+            ;;
+        esac
+        
+        echo "System dependencies installation completed."
+
     - name: Install dependencies
       run: |
         python -m pip install --upgrade pip
@@ -102,13 +144,26 @@ jobs:
         echo "Building ${{ matrix.platform }} version..."
         python build.py --clean --build --system-python
         
-        # Verify build
-        if [ ! -f "dist/Cipher.exe" ]; then
-          echo "ERROR: Cipher.exe not found!"
-          ls -la dist/ || true
-          exit 1
-        fi
-        echo "Build successful: dist/Cipher.exe"
+        # Verify build based on platform
+        echo "Verifying build for ${{ matrix.platform }}..."
+        case "${{ matrix.platform }}" in
+          windows)
+            if [ ! -f "dist/Cipher.exe" ]; then
+              echo "ERROR: Cipher.exe not found!"
+              ls -la dist/ || true
+              exit 1
+            fi
+            echo "Build successful: dist/Cipher.exe"
+            ;;
+          macos|linux)
+            if [ ! -f "dist/Cipher" ]; then
+              echo "ERROR: Cipher not found!"
+              ls -la dist/ || true
+              exit 1
+            fi
+            echo "Build successful: dist/Cipher"
+            ;;
+        esac
 
     - name: Test build
       run: |
@@ -118,10 +173,20 @@ jobs:
     - name: Prepare release assets
       shell: bash
       run: |
-        echo "Preparing release assets..."
+        echo "Preparing release assets for ${{ matrix.platform }}..."
         
-        # Rename files
-        cp dist/Cipher.exe dist/${{ matrix.output_name }}
+        # Copy executable based on platform
+        case "${{ matrix.platform }}" in
+          windows)
+            echo "Copying Windows executable..."
+            cp dist/Cipher.exe dist/${{ matrix.output_name }}
+            ;;
+          macos|linux)
+            echo "Copying macOS/Linux executable..."
+            cp dist/Cipher dist/${{ matrix.output_name }}
+            ;;
+        esac
+        
         RELEASE_FILE="dist/${{ matrix.output_name }}"
         
         # Calculate SHA256
@@ -139,6 +204,19 @@ jobs:
         # Update build information file
         echo "${{ matrix.output_name }}: $SHA256" >> build-info-${{ matrix.platform }}.txt
         
+        # Create platform-specific installation instructions
+        case "${{ matrix.platform }}" in
+          windows)
+            INSTALL_INSTRUCTIONS="Windows: Double-click ${{ matrix.output_name }} or run from command line"
+            ;;
+          macos)
+            INSTALL_INSTRUCTIONS="macOS: Right-click ${{ matrix.output_name }} and select 'Open', or run './${{ matrix.output_name }}' from terminal"
+            ;;
+          linux)
+            INSTALL_INSTRUCTIONS="Linux: Make executable with 'chmod +x ${{ matrix.output_name }}' then run './${{ matrix.output_name }}'"
+            ;;
+        esac
+        
         # Create final version information file
         cat > release-${{ matrix.platform }}.txt << EOF
         MiniCipher Release
@@ -151,7 +229,7 @@ jobs:
         
         Installation:
         -------------
-        Windows: Double-click ${{ matrix.output_name }} or run from command line
+        $INSTALL_INSTRUCTIONS
         
         Source code: https://github.com/${{ github.repository }}
         EOF
@@ -245,6 +323,19 @@ jobs:
         echo "### Windows" >> release-notes.md
         echo "1. Download `cipher-windows-x64.exe`" >> release-notes.md
         echo "2. Double-click to run" >> release-notes.md
+        echo "" >> release-notes.md
+        echo "### macOS (Intel)" >> release-notes.md
+        echo "1. Download `cipher-macos-x64`" >> release-notes.md
+        echo "2. Right-click the file and select 'Open', or run `./cipher-macos-x64` from terminal" >> release-notes.md
+        echo "" >> release-notes.md
+        echo "### macOS (Apple Silicon)" >> release-notes.md
+        echo "1. Download `cipher-macos-arm64`" >> release-notes.md
+        echo "2. Right-click the file and select 'Open', or run `./cipher-macos-arm64` from terminal" >> release-notes.md
+        echo "" >> release-notes.md
+        echo "### Linux" >> release-notes.md
+        echo "1. Download `cipher-linux-x64`" >> release-notes.md
+        echo "2. Make executable: `chmod +x cipher-linux-x64`" >> release-notes.md
+        echo "3. Run: `./cipher-linux-x64`" >> release-notes.md
         echo "" >> release-notes.md
         
         if [ -n "$PREVIOUS_TAG" ]; then
