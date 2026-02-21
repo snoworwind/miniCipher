@@ -775,11 +775,27 @@ class CipherGUI:
     
     def _show_about(self):
         """显示关于对话框"""
+        # 尝试从version_info模块获取版本信息
+        try:
+            from version_info import get_version_string, get_version_info
+            version_string = get_version_string()
+            version_info = get_version_info()
+        except ImportError:
+            # 如果version_info模块不可用，使用默认值
+            version_string = "1.0"
+            version_info = {"version": version_string}
+        
+        # 获取构建信息（如果可用）
+        build_date = version_info.get('build_date', 'Unknown')
+        commit_hash = version_info.get('commit_hash', 'Unknown')
+        
         about_text = f"""Cipher - 文件加密工具
-版本: 1.0 (支持多语言和配置)
+版本: {version_string}
 支持算法: OTP, AES256-GCM
 语言: {self.translator.get_current_language_display_name()}
 配置文件: {self.config_manager.config_file}
+构建日期: {build_date}
+提交哈希: {commit_hash}
         
 版权所有 © 2026 miniCipher项目"""
         

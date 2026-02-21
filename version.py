@@ -10,6 +10,21 @@ import subprocess
 import datetime
 from pathlib import Path
 
+# Project version constants - single source of truth for version information
+PROJECT_VERSION_MAJOR = 1
+PROJECT_VERSION_MINOR = 0
+PROJECT_VERSION_PATCH = 0
+PROJECT_VERSION = f"v{PROJECT_VERSION_MAJOR}.{PROJECT_VERSION_MINOR}.{PROJECT_VERSION_PATCH}"
+
+# For datetime.utcnow() deprecation - use timezone-aware UTC
+try:
+    # Python 3.11+ has datetime.UTC alias
+    from datetime import UTC
+except ImportError:
+    # Python 3.9-3.10 use timezone.utc
+    from datetime import timezone
+    UTC = timezone.utc
+
 def get_git_info():
     """Get git repository information"""
     try:
@@ -85,7 +100,7 @@ def generate_version_number(git_info, build_type='dev'):
                 pass
     
     # Build metadata part
-    build_date = datetime.datetime.utcnow().strftime('%Y-%m-%d')
+    build_date = datetime.datetime.now(UTC).strftime('%Y-%m-%d')
     commit_count = git_info['commit_count']
     commit_hash = git_info['commit_hash'][:8]  # Take first 8 characters
     
@@ -108,7 +123,7 @@ def write_version_file(version, platform_info=None):
     """Write version information file"""
     version_info = {
         'version': version,
-        'build_date': datetime.datetime.utcnow().isoformat() + 'Z',
+        'build_date': datetime.datetime.now(UTC).isoformat() + 'Z',
         'build_type': 'release' if '+release' in version else 'dev'
     }
     
@@ -154,7 +169,7 @@ Auto-generated version information - for injection into executable
 """
 
 VERSION = "{version}"
-BUILD_DATE = "{datetime.datetime.utcnow().isoformat()}Z"
+BUILD_DATE = "{datetime.datetime.now(UTC).isoformat()}Z"
 COMMIT_HASH = "{git_info['commit_hash']}"
 COMMIT_COUNT = "{git_info['commit_count']}"
 BRANCH = "{git_info['branch']}"

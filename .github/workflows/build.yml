@@ -64,17 +64,17 @@ jobs:
       id: version
       shell: bash
       run: |
-        # Generate version information
-        echo "VERSION_DATE=$(date +'%Y-%m-%d')" >> $GITHUB_OUTPUT
-        echo "COMMIT_HASH=$(git rev-parse --short HEAD)" >> $GITHUB_OUTPUT
+        # Use version.py script to generate version information
+        python version.py --type dev --platform ${{ matrix.platform }} --architecture ${{ matrix.architecture }}
+        
+        # Extract version from version.txt for GitHub Actions outputs
+        VERSION=$(grep '^version:' version.txt | cut -d' ' -f2)
+        COMMIT_HASH=$(grep '^commit_hash:' version.txt | cut -d' ' -f2)
+        
+        echo "VERSION=$VERSION" >> $GITHUB_OUTPUT
+        echo "COMMIT_HASH=$COMMIT_HASH" >> $GITHUB_OUTPUT
         echo "RUN_ID=${{ github.run_id }}" >> $GITHUB_OUTPUT
         echo "RUN_NUMBER=${{ github.run_number }}" >> $GITHUB_OUTPUT
-        
-        # Create version file
-        echo "version: v1.0.0+${{ github.run_id }}-$(git rev-parse --short HEAD)" > version.txt
-        echo "build_date: $(date -u +'%Y-%m-%d %H:%M:%S UTC')" >> version.txt
-        echo "commit: $(git rev-parse HEAD)" >> version.txt
-        echo "platform: ${{ matrix.platform }}-${{ matrix.architecture }}" >> version.txt
 
     - name: Display Python version
       run: |

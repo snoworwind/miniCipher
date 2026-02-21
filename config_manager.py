@@ -53,8 +53,16 @@ class ConfigurationManager:
     
     def _get_default_config(self) -> Dict[str, Any]:
         """获取默认配置"""
+        # 从version_info模块获取版本信息
+        try:
+            from version_info import get_config_version
+            config_version = get_config_version()
+        except ImportError:
+            # 如果version_info不可用，使用默认值
+            config_version = "1.0"
+        
         return {
-            "version": "1.0",
+            "version": config_version,
             "ui": {
                 "language": Language.ZH_CN.value,
                 "theme": "default",

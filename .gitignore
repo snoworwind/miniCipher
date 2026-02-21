@@ -74,6 +74,7 @@ key_*
 解密结果/
 待加密文件/
 解密后文件/
+version.txt
 
 # Temporary files
 *.tmp

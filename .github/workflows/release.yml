@@ -83,26 +83,35 @@ jobs:
           ${{ runner.os }}-pip-
 
 
-    - name: Generate build info
+    - name: Generate version information
       shell: bash
       run: |
-        # Generate detailed build information
-        echo "=== BUILD INFORMATION ==="
-        echo "Tag: ${{ steps.get_version.outputs.VERSION }}"
-        echo "Platform: ${{ matrix.platform }}-${{ matrix.architecture }}"
-        echo "Build date: $(date)"
-        echo "Commit: $(git rev-parse HEAD)"
-        echo "========================="
+        # Use version.py script to generate version information for release
+        python version.py --type release --platform ${{ matrix.platform }} --architecture ${{ matrix.architecture }}
         
-        # Create build information file
+        # Extract version from version.txt
+        VERSION=$(grep '^version:' version.txt | cut -d' ' -f2)
+        BUILD_DATE=$(grep '^build_date:' version.txt | cut -d' ' -f2)
+        COMMIT_HASH=$(grep '^commit_hash:' version.txt | cut -d' ' -f2)
+        COMMIT_COUNT=$(grep '^commit_count:' version.txt | cut -d' ' -f2)
+        
+        echo "=== VERSION INFORMATION ==="
+        echo "Version: $VERSION"
+        echo "Build date: $BUILD_DATE"
+        echo "Commit hash: $COMMIT_HASH"
+        echo "Commit count: $COMMIT_COUNT"
+        echo "Platform: ${{ matrix.platform }}-${{ matrix.architecture }}"
+        echo "=========================="
+        
+        # Create build information file using actual version information
         cat > build-info-${{ matrix.platform }}.txt << EOF
         MiniCipher Build Information
         ============================
-        Version: ${{ steps.get_version.outputs.VERSION }}
+        Version: $VERSION
         Platform: ${{ matrix.platform }}-${{ matrix.architecture }}
-        Build date: $(date -u +'%Y-%m-%d %H:%M:%S UTC')
+        Build date: $BUILD_DATE
         Commit: $(git rev-parse HEAD)
-        Commit short: $(git rev-parse --short HEAD)
+        Commit short: $COMMIT_HASH
         Python version: $(python --version)
         Build runner: ${{ matrix.os }}
         
