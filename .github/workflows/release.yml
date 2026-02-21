@@ -22,6 +22,9 @@ jobs:
             output_name: Cipher-linux-x64
             asset_name: cipher-linux-x64
 
+    env:
+      PYTHONIOENCODING: utf-8
+
     runs-on: ${{ matrix.os }}
     name: Build for ${{ matrix.platform }}
 
@@ -183,6 +186,9 @@ jobs:
     needs: build-all-platforms
     name: Create GitHub Release
     if: success()
+
+    env:
+      PYTHONIOENCODING: utf-8
 
     steps:
     - name: Checkout repository
