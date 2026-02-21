@@ -5,7 +5,7 @@ on:
     branches: [ main ]
   pull_request:
     branches: [ main ]
-  workflow_dispatch:  # 允许手动触发
+  workflow_dispatch:  # Allow manual trigger
 
 jobs:
   build:
@@ -15,13 +15,13 @@ jobs:
         python-version: ['3.9', '3.10', '3.11']
         exclude:
           - os: windows-latest
-            python-version: '3.9'  # Windows上只测试最新Python版本
+            python-version: '3.9'  # Test only latest Python version on Windows
           - os: macos-latest
-            python-version: '3.9'  # macOS上只测试最新Python版本
+            python-version: '3.9'  # Test only latest Python version on macOS
           - os: ubuntu-latest
-            python-version: '3.9'  # Linux上只测试最新Python版本
+            python-version: '3.9'  # Test only latest Python version on Linux
         include:
-          # 主要构建配置 - 每个平台一个构建
+          # Main build configuration - one build per platform
           - os: windows-latest
             python-version: '3.11'
             platform: windows
@@ -53,13 +53,13 @@ jobs:
     - name: Generate version information
       id: version
       run: |
-        # 生成版本信息
+        # Generate version information
         echo "VERSION_DATE=$(date +'%Y-%m-%d')" >> $GITHUB_OUTPUT
         echo "COMMIT_HASH=$(git rev-parse --short HEAD)" >> $GITHUB_OUTPUT
         echo "RUN_ID=${{ github.run_id }}" >> $GITHUB_OUTPUT
         echo "RUN_NUMBER=${{ github.run_number }}" >> $GITHUB_OUTPUT
         
-        # 创建版本文件
+        # Create version file
         echo "version: v1.0.0+${{ github.run_id }}-$(git rev-parse --short HEAD)" > version.txt
         echo "build_date: $(date -u +'%Y-%m-%d %H:%M:%S UTC')" >> version.txt
         echo "commit: $(git rev-parse HEAD)" >> version.txt
@@ -80,7 +80,7 @@ jobs:
         echo "Building on ${{ matrix.platform }} ${{ matrix.architecture }}..."
         python build.py --clean --build --system-python
         
-        # 验证构建结果
+        # Verify build result
         if [ "${{ matrix.platform }}" = "windows" ]; then
           if [ -f "dist/Cipher.exe" ]; then
             echo "Build successful: dist/Cipher.exe"
@@ -111,25 +111,25 @@ jobs:
         echo "Preparing artifact: ${{ matrix.output_name }}"
         
         if [ "${{ matrix.platform }}" = "windows" ]; then
-          # Windows: 重命名exe文件
+          # Windows: rename exe file
           cp dist/Cipher.exe dist/${{ matrix.output_name }}
           echo "Artifact prepared: ${{ matrix.output_name }}"
         elif [ "${{ matrix.platform }}" = "macos" ]; then
-          # macOS: 重命名并确保可执行权限
+          # macOS: rename and ensure executable permissions
           cp dist/Cipher dist/${{ matrix.output_name }}
           chmod +x dist/${{ matrix.output_name }}
           echo "Artifact prepared: ${{ matrix.output_name }}"
         else
-          # Linux: 重命名并确保可执行权限
+          # Linux: rename and ensure executable permissions
           cp dist/Cipher dist/${{ matrix.output_name }}
           chmod +x dist/${{ matrix.output_name }}
           echo "Artifact prepared: ${{ matrix.output_name }}"
         fi
         
-        # 复制版本文件
+        # Copy version file
         cp version.txt dist/version-${{ matrix.platform }}-${{ matrix.architecture }}.txt
         
-        # 显示构建结果
+        # Display build results
         echo "Build artifacts:"
         ls -la dist/
 
@@ -144,7 +144,7 @@ jobs:
 
   test:
     runs-on: ubuntu-latest
-    needs: build  # 依赖build作业完成
+    needs: build
     name: Run unit tests
 
     steps:
@@ -186,7 +186,7 @@ jobs:
         echo "Build completed for:"
         echo ""
         
-        # 列出所有构建产物
+        
         if [ -d "artifacts" ]; then
           find artifacts -name "*.exe" -o -name "Cipher-*" | while read file; do
             size=$(stat -c%s "$file" 2>/dev/null || stat -f%z "$file" 2>/dev/null || echo "unknown")

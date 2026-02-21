@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
-版本管理脚本 - 用于GitHub Actions自动构建
-自动生成版本号，支持递增版本管理
+Version management script - for GitHub Actions automated builds
+Auto-generates version numbers with incremental version management
 """
 
 import os
@@ -11,21 +11,21 @@ import datetime
 from pathlib import Path
 
 def get_git_info():
-    """获取git仓库信息"""
+    """Get git repository information"""
     try:
-        # 获取当前commit hash
+        # Get current commit hash
         commit_hash = subprocess.check_output(
             ['git', 'rev-parse', '--short', 'HEAD'],
             text=True
         ).strip()
         
-        # 获取commit总数（用于版本递增）
+        # Get total commit count (for version increment)
         commit_count = subprocess.check_output(
             ['git', 'rev-list', '--count', 'HEAD'],
             text=True
         ).strip()
         
-        # 获取当前tag（如果有）
+        # Get current tag (if any)
         try:
             tag = subprocess.check_output(
                 ['git', 'describe', '--tags', '--abbrev=0'],
@@ -34,7 +34,7 @@ def get_git_info():
         except subprocess.CalledProcessError:
             tag = None
         
-        # 获取当前分支
+        # Get current branch
         branch = subprocess.check_output(
             ['git', 'rev-parse', '--abbrev-ref', 'HEAD'],
             text=True
@@ -47,7 +47,7 @@ def get_git_info():
             'branch': branch
         }
     except Exception as e:
-        print(f"获取git信息失败: {e}")
+        print(f"Failed to get git info: {e}")
         return {
             'commit_hash': 'unknown',
             'commit_count': '0',
@@ -57,24 +57,24 @@ def get_git_info():
 
 def generate_version_number(git_info, build_type='dev'):
     """
-    生成版本号
+    Generate version number
     
-    格式: v{主版本}.{次版本}.{补丁版本}+{构建类型}.{构建日期}.{提交次数}.{提交哈希}
-    示例: v1.0.0+dev.2026-02-21.123.abc123
+    Format: v{major}.{minor}.{patch}+{build_type}.{build_date}.{commit_count}.{commit_hash}
+    Example: v1.0.0+dev.2026-02-21.123.abc123
     
-    构建类型:
-    - dev: 开发版本（CI构建）
-    - release: 发布版本（tag构建）
+    Build types:
+    - dev: Development version (CI build)
+    - release: Release version (tag build)
     """
-    # 基础版本（可以从文件中读取，这里使用固定值）
+    # Base version (can be read from file, here using fixed values)
     major = 1
     minor = 0
     patch = 0
     
-    # 如果存在tag，使用tag作为版本基础
+    # If tag exists, use tag as version base
     if git_info['tag'] and git_info['tag'].startswith('v'):
-        # 解析tag版本
-        tag_version = git_info['tag'][1:]  # 移除'v'前缀
+        # Parse tag version
+        tag_version = git_info['tag'][1:]  # Remove 'v' prefix
         version_parts = tag_version.split('.')
         if len(version_parts) >= 3:
             try:
@@ -84,19 +84,19 @@ def generate_version_number(git_info, build_type='dev'):
             except ValueError:
                 pass
     
-    # 构建元数据部分
+    # Build metadata part
     build_date = datetime.datetime.utcnow().strftime('%Y-%m-%d')
     commit_count = git_info['commit_count']
-    commit_hash = git_info['commit_hash'][:8]  # 取前8位
+    commit_hash = git_info['commit_hash'][:8]  # Take first 8 characters
     
-    # 确定构建类型
+    # Determine build type
     if build_type == 'release':
-        # 发布版本
+        # Release version
         version = f"v{major}.{minor}.{patch}"
     else:
-        # 开发版本 - 递增版本号
+        # Development version - incremental version number
         if build_type == 'dev':
-            # 开发版本递增补丁版本
+            # Development version increments patch version
             patch = int(commit_count)
             version = f"v{major}.{minor}.{patch}+{build_type}.{build_date}.{commit_hash}"
         else:
@@ -105,52 +105,52 @@ def generate_version_number(git_info, build_type='dev'):
     return version
 
 def write_version_file(version, platform_info=None):
-    """写入版本信息文件"""
+    """Write version information file"""
     version_info = {
         'version': version,
         'build_date': datetime.datetime.utcnow().isoformat() + 'Z',
         'build_type': 'release' if '+release' in version else 'dev'
     }
     
-    # 添加git信息
+    # Add git information
     git_info = get_git_info()
     version_info.update(git_info)
     
-    # 添加平台信息
+    # Add platform information
     if platform_info:
         version_info['platform'] = platform_info.get('platform', 'unknown')
         version_info['architecture'] = platform_info.get('architecture', 'unknown')
     
-    # 写入文件
+    # Write to file
     output_file = Path(__file__).parent / 'version.txt'
     
     with open(output_file, 'w', encoding='utf-8') as f:
-        f.write("# MiniCipher 版本信息\n")
-        f.write("# ====================\n\n")
+        f.write("# MiniCipher Version Information\n")
+        f.write("# ==============================\n\n")
         
         for key, value in version_info.items():
             if value is not None:
                 f.write(f"{key}: {value}\n")
     
-    print(f"版本文件已生成: {output_file}")
-    print(f"版本号: {version}")
+    print(f"Version file generated: {output_file}")
+    print(f"Version: {version}")
     
     return version
 
 def inject_version_into_executable():
     """
-    尝试将版本信息注入到构建的可执行文件中
-    这需要在构建过程中调用
+    Attempt to inject version information into the built executable
+    This needs to be called during the build process
     """
     try:
-        # 创建版本信息文件，供构建脚本使用
+        # Create version information file for build script use
         version_file = Path(__file__).parent / 'version_info.py'
         
         git_info = get_git_info()
         version = generate_version_number(git_info)
         
         content = f'''"""
-自动生成的版本信息 - 用于注入到可执行文件中
+Auto-generated version information - for injection into executable
 """
 
 VERSION = "{version}"
@@ -160,7 +160,7 @@ COMMIT_COUNT = "{git_info['commit_count']}"
 BRANCH = "{git_info['branch']}"
 
 def get_version():
-    """获取版本信息"""
+    """Get version information"""
     return {{
         "version": VERSION,
         "build_date": BUILD_DATE,
@@ -176,36 +176,36 @@ if __name__ == "__main__":
         with open(version_file, 'w', encoding='utf-8') as f:
             f.write(content)
         
-        print(f"版本信息文件已生成: {version_file}")
+        print(f"Version information file generated: {version_file}")
         return version_file
         
     except Exception as e:
-        print(f"生成版本信息文件失败: {e}")
+        print(f"Failed to generate version information file: {e}")
         return None
 
 def main():
-    """命令行入口"""
+    """Command line entry point"""
     import argparse
     
-    parser = argparse.ArgumentParser(description='生成版本信息')
+    parser = argparse.ArgumentParser(description='Generate version information')
     parser.add_argument('--type', choices=['dev', 'release'], default='dev',
-                       help='构建类型: dev(开发版本) 或 release(发布版本)')
+                       help='Build type: dev (development version) or release (release version)')
     parser.add_argument('--platform', default=None,
-                       help='目标平台: windows, macos, linux')
+                       help='Target platform: windows, macos, linux')
     parser.add_argument('--architecture', default='x64',
-                       help='目标架构: x64, universal, arm64等')
+                       help='Target architecture: x64, universal, arm64, etc.')
     parser.add_argument('--inject', action='store_true',
-                       help='生成版本信息文件供构建脚本使用')
+                       help='Generate version information file for build script use')
     
     args = parser.parse_args()
     
-    # 获取git信息
+    # Get git information
     git_info = get_git_info()
     
-    # 生成版本号
+    # Generate version number
     version = generate_version_number(git_info, args.type)
     
-    # 平台信息
+    # Platform information
     platform_info = None
     if args.platform:
         platform_info = {
@@ -213,14 +213,14 @@ def main():
             'architecture': args.architecture
         }
     
-    # 写入版本文件
+    # Write version file
     write_version_file(version, platform_info)
     
-    # 如果需要，生成注入文件
+    # If needed, generate injection file
     if args.inject:
         inject_version_into_executable()
     
-    # 输出版本号（供脚本使用）
+    # Output version number (for script use)
     print(f"::set-output name=version::{version}")
     
     return 0

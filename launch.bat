@@ -1,24 +1,24 @@
 @echo off
 chcp 65001 >nul
-REM Cipher工具启动脚本（Windows版）
+REM Cipher tool launch script (Windows version)
 
 echo ========================================
-echo Cipher加密工具启动
+echo Cipher Encryption Tool Launch
 echo ========================================
 echo.
 
 if exist "dist\Cipher.exe" (
-    echo 正在启动Cipher工具...
+    echo Starting Cipher tool...
     echo.
     dist\Cipher.exe
     echo.
-    echo Cipher工具已退出
+    echo Cipher tool has exited
 ) else (
-    echo 错误: 未找到可执行文件
+    echo Error: Executable not found
     echo.
-    echo 请先运行以下命令构建:
+    echo Please build first with:
     echo   python build.py --all
-    echo 或:
+    echo or:
     echo   python build.py --install-deps --build
     exit /b 1
 )

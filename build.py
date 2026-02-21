@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
-Cipher工具 - 简化版构建脚本
-支持使用PyInstaller打包加密/解密工具
+Cipher - Simplified Build Script
+Supports packaging encryption/decryption tools with PyInstaller
 """
 
 import os
@@ -13,35 +13,35 @@ import argparse
 from pathlib import Path
 
 def check_environment():
-    """检查Python环境"""
+    """Check Python environment"""
     print("=" * 60)
-    print("检查环境...")
+    print("Checking environment...")
     print("=" * 60)
     
     python_version = platform.python_version()
-    print(f"Python版本: {python_version}")
+    print(f"Python version: {python_version}")
     
     if sys.version_info < (3, 7):
-        print("警告: 建议使用Python 3.7或更高版本")
+        print("Warning: Python 3.7 or higher is recommended")
     
     system = platform.system()
-    print(f"操作系统: {system}")
+    print(f"Operating system: {system}")
     
-    # 检查tkinter
+    # Check tkinter
     try:
         import tkinter
-        print("tkinter: 可用 ✓")
+        print("tkinter: available ✓")
     except ImportError as e:
-        print(f"警告: tkinter不可用 - {e}")
+        print(f"Warning: tkinter not available - {e}")
         if system == "Darwin":
-            print("macOS解决方案: brew install python-tk")
+            print("macOS solution: brew install python-tk")
     
     return True
 
 def install_dependencies(use_system_python=False):
-    """安装必要的依赖"""
+    """Install necessary dependencies"""
     print("=" * 60)
-    print("安装依赖...")
+    print("Installing dependencies...")
     print("=" * 60)
     
     try:
@@ -50,45 +50,45 @@ def install_dependencies(use_system_python=False):
         else:
             pip_cmd = ["pip"]
         
-        # 安装PyInstaller
-        print("安装PyInstaller...")
+        # Install PyInstaller
+        print("Installing PyInstaller...")
         subprocess.run(pip_cmd + ["install", "pyinstaller", "--upgrade"], check=True)
         
-        # 安装项目依赖
-        print("安装项目依赖...")
+        # Install project dependencies
+        print("Installing project dependencies...")
         requirements_file = Path(__file__).parent / "requirements.txt"
         if requirements_file.exists():
             subprocess.run(pip_cmd + ["install", "-r", str(requirements_file)], check=True)
         else:
-            print("安装cryptography...")
+            print("Installing cryptography...")
             subprocess.run(pip_cmd + ["install", "cryptography>=42.0.0"], check=True)
         
-        print("依赖安装完成 ✓")
+        print("Dependencies installed ✓")
         return True
         
     except subprocess.CalledProcessError as e:
-        print(f"安装依赖失败: {e}")
-        print("\n手动安装命令:")
+        print(f"Dependency installation failed: {e}")
+        print("\nManual installation command:")
         print("  pip install pyinstaller cryptography")
         return False
 
 def update_spec_file():
-    """更新或创建spec文件 - 增强版"""
+    """Update or create spec file - enhanced version"""
     print("=" * 60)
-    print("更新spec文件...")
+    print("Updating spec file...")
     print("=" * 60)
     
     project_dir = Path(__file__).parent.absolute()
     spec_file = project_dir / "cipher.spec"
     
-    # 创建增强版spec文件内容，使用正确的路径（转义反斜杠）
+    # Create enhanced spec file content with proper path escaping
     project_dir_str = str(project_dir)
-    # 转义Windows路径中的反斜杠
+    # Escape backslashes in Windows paths
     project_dir_escaped = project_dir_str.replace('\\', '\\\\')
     
     spec_content = f'''# -*- mode: python ; coding: utf-8 -*-
-# Cipher工具 - PyInstaller spec文件
-# 自动生成，包含所有必要的依赖和配置
+# Cipher - PyInstaller spec file
+# Auto-generated, includes all necessary dependencies and configuration
 
 block_cipher = None
 
@@ -169,24 +169,24 @@ coll = COLLECT(
 )'''
     
     try:
-        # 如果spec文件不存在，直接创建它
+        # If spec file doesn't exist, create it directly
         if not spec_file.exists():
-            print(f"创建新的spec文件: {spec_file}")
+            print(f"Creating new spec file: {spec_file}")
             with open(spec_file, 'w', encoding='utf-8') as f:
                 f.write(spec_content)
-            print(f"✓ spec文件已创建: {spec_file}")
+            print(f"✓ Spec file created: {spec_file}")
             return True
         
-        # 读取现有spec文件
-        print(f"读取现有spec文件: {spec_file}")
+        # Read existing spec file
+        print(f"Reading existing spec file: {spec_file}")
         with open(spec_file, 'r', encoding='utf-8') as f:
             existing_content = f.read()
         
-        # 检查现有spec文件是否完整
+        # Check if existing spec file is complete
         spec_is_valid = True
         missing_imports = []
         
-        # 检查必要的hiddenimports
+        # Check necessary hiddenimports
         required_imports = [
             'cryptography.hazmat.backends.openssl.backend',
             'cryptography.hazmat.primitives.ciphers.algorithms',
@@ -199,55 +199,55 @@ coll = COLLECT(
                 missing_imports.append(imp)
         
         if spec_is_valid:
-            print(f"✓ spec文件已是最新且完整")
+            print(f"✓ Spec file is up to date and complete")
             
-            # 确保noarchive设置正确
+            # Ensure noarchive setting is correct
             if "noarchive=True" in existing_content:
                 updated_content = existing_content.replace("noarchive=True", "noarchive=False")
                 with open(spec_file, 'w', encoding='utf-8') as f:
                     f.write(updated_content)
-                print("已修复noarchive设置: True → False")
+                print("Fixed noarchive setting: True → False")
             elif "noarchive = True" in existing_content:
                 updated_content = existing_content.replace("noarchive = True", "noarchive = False")
                 with open(spec_file, 'w', encoding='utf-8') as f:
                     f.write(updated_content)
-                print("已修复noarchive设置: True → False")
+                print("Fixed noarchive setting: True → False")
             
             return True
         else:
-            print(f"警告: spec文件缺少必要的导入: {missing_imports}")
-            print("将使用增强版spec文件替换...")
+            print(f"Warning: spec file missing necessary imports: {missing_imports}")
+            print("Replacing with enhanced spec file...")
             
-            # 备份原文件
+            # Backup original file
             backup_file = spec_file.with_suffix('.spec.backup')
             with open(backup_file, 'w', encoding='utf-8') as f:
                 f.write(existing_content)
-            print(f"原spec文件已备份到: {backup_file}")
+            print(f"Original spec file backed up to: {backup_file}")
             
-            # 写入增强版spec文件
+            # Write enhanced spec file
             with open(spec_file, 'w', encoding='utf-8') as f:
                 f.write(spec_content)
             
-            print(f"✓ spec文件已更新为增强版")
+            print(f"✓ Spec file updated to enhanced version")
             return True
             
     except Exception as e:
-        print(f"错误: 处理spec文件时发生异常: {e}")
-        print("尝试创建新的spec文件...")
+        print(f"Error: Exception occurred while processing spec file: {e}")
+        print("Attempting to create new spec file...")
         
         try:
             with open(spec_file, 'w', encoding='utf-8') as f:
                 f.write(spec_content)
-            print(f"✓ spec文件已创建（错误恢复）: {spec_file}")
+            print(f"✓ Spec file created (error recovery): {spec_file}")
             return True
         except Exception as e2:
-            print(f"✗ 无法创建spec文件: {e2}")
+            print(f"✗ Unable to create spec file: {e2}")
             return False
 
 def run_build(clean=False):
-    """运行PyInstaller构建"""
+    """Run PyInstaller build"""
     print("=" * 60)
-    print("运行PyInstaller构建...")
+    print("Running PyInstaller build...")
     print("=" * 60)
     
     project_dir = Path(__file__).parent.absolute()
@@ -255,16 +255,16 @@ def run_build(clean=False):
     build_dir = project_dir / "build"
     dist_dir = project_dir / "dist"
     
-    # 清理旧的构建文件
+    # Clean old build files
     if clean:
         if build_dir.exists():
-            print("清理旧的build目录...")
+            print("Cleaning old build directory...")
             shutil.rmtree(build_dir)
         if dist_dir.exists():
-            print("清理旧的dist目录...")
+            print("Cleaning old dist directory...")
             shutil.rmtree(dist_dir)
     
-    # 构建命令
+    # Build command
     cmd = [
         "pyinstaller",
         str(spec_file),
@@ -272,18 +272,18 @@ def run_build(clean=False):
         "--noconfirm"
     ]
     
-    print(f"执行命令: {' '.join(cmd)}")
+    print(f"Executing command: {' '.join(cmd)}")
     
     try:
         result = subprocess.run(cmd, check=True, capture_output=True, text=True)
-        print("构建输出:")
+        print("Build output:")
         if result.stdout:
-            # 只显示关键信息
+            # Show only key information
             for line in result.stdout.split('\n'):
                 if any(keyword in line for keyword in ["INFO:", "WARNING:", "ERROR:", "writing", "checking", "compiling"]):
                     print(f"  {line}")
         
-        # 验证构建结果 - Windows上应该是Cipher.exe，其他系统是Cipher
+        # Verify build result - should be Cipher.exe on Windows, Cipher on other systems
         system = platform.system()
         if system == "Windows":
             exe_path = dist_dir / "Cipher.exe"
@@ -291,36 +291,36 @@ def run_build(clean=False):
             exe_path = dist_dir / "Cipher"
             
         if exe_path.exists():
-            print(f"✓ 可执行文件已创建: {exe_path}")
+            print(f"✓ Executable created: {exe_path}")
             
-            # 显示文件大小
+            # Show file size
             size_mb = exe_path.stat().st_size / (1024 * 1024)
-            print(f"  文件大小: {size_mb:.2f} MB")
+            print(f"  File size: {size_mb:.2f} MB")
             
             return True
         else:
-            print(f"✗ 可执行文件未找到: {exe_path}")
-            # 尝试查找任何可能的可执行文件
+            print(f"✗ Executable not found: {exe_path}")
+            # Try to find any possible executable files
             for file in dist_dir.iterdir():
                 if file.is_file() and (file.name == "Cipher" or file.name == "Cipher.exe"):
-                    print(f"  找到文件: {file.name} (大小: {file.stat().st_size} 字节)")
+                    print(f"  Found file: {file.name} (size: {file.stat().st_size} bytes)")
             return False
             
     except subprocess.CalledProcessError as e:
-        print(f"构建失败: {e}")
+        print(f"Build failed: {e}")
         if e.stderr:
-            print("错误输出:")
-            print(e.stderr[:500])  # 只显示前500个字符
+            print("Error output:")
+            print(e.stderr[:500])  # Show only first 500 characters
         return False
     except FileNotFoundError:
-        print("错误: 找不到pyinstaller命令")
-        print("请先运行: python build.py --install-deps")
+        print("Error: pyinstaller command not found")
+        print("Please run first: python build.py --install-deps")
         return False
 
 def test_build():
-    """测试构建的可执行文件 - 增强版，适用于GUI应用程序"""
+    """Test the built executable - enhanced version for GUI applications"""
     print("=" * 60)
-    print("测试构建结果...")
+    print("Testing build results...")
     print("=" * 60)
     
     system = platform.system()
@@ -330,94 +330,94 @@ def test_build():
         exe_path = Path(__file__).parent.absolute() / "dist" / "Cipher"
     
     if not exe_path.exists():
-        print(f"✗ 跳过测试: {exe_path} 不存在")
-        # 尝试查找其他可能的文件
+        print(f"✗ Skipping test: {exe_path} does not exist")
+        # Try to find any possible executable files
         dist_dir = Path(__file__).parent.absolute() / "dist"
         for file in dist_dir.iterdir():
             if file.is_file() and ("Cipher" in file.name):
-                print(f"  找到文件: {file.name} (大小: {file.stat().st_size:,} 字节)")
+                print(f"  Found file: {file.name} (size: {file.stat().st_size:,} bytes)")
         return False
     
-    print(f"测试可执行文件: {exe_path}")
+    print(f"Testing executable: {exe_path}")
     
     try:
-        # GUI应用程序测试 - 验证文件属性和基本完整性
+        # GUI application test - verify file properties and basic integrity
         if not exe_path.is_file():
-            print(f"✗ 不是有效的文件: {exe_path}")
+            print(f"✗ Not a valid file: {exe_path}")
             return False
         
-        # 检查文件大小
+        # Check file size
         file_size = exe_path.stat().st_size
-        print(f"  文件大小: {file_size:,} 字节")
+        print(f"  File size: {file_size:,} bytes")
         
         if file_size == 0:
-            print(f"✗ 文件大小为0，可能构建失败")
+            print(f"✗ File size is 0, build may have failed")
             return False
         
-        # 检查文件是否具有可执行属性（Windows上主要检查文件是否存在且可读）
-        if file_size < 1024:  # 小于1KB的文件肯定有问题
-            print(f"✗ 文件大小异常小，可能构建不完整")
+        # Check if file has executable attributes (on Windows mainly check if file exists and is readable)
+        if file_size < 1024:  # Files less than 1KB are definitely problematic
+            print(f"✗ File size is abnormally small, build may be incomplete")
             return False
         
-        # 对于GUI应用程序，成功的构建和合理的文件大小就是有效的测试
-        # 不需要实际运行程序，因为GUI程序在自动化测试中可能因权限问题失败
-        print(f"✓ 构建验证通过")
-        print(f"  - 文件存在且可访问")
-        print(f"  - 文件大小合理 ({file_size:,} 字节)")
-        print(f"  - 构建完整性验证完成")
+        # For GUI applications, successful build and reasonable file size constitute a valid test
+        # No need to actually run the program as GUI programs may fail due to permission issues in automated testing
+        print(f"✓ Build verification passed")
+        print(f"  - File exists and is accessible")
+        print(f"  - File size is reasonable ({file_size:,} bytes)")
+        print(f"  - Build integrity verification completed")
         
-        # 提供用户友好的信息
+        # Provide user-friendly information
         system = platform.system()
         if system == "Windows":
-            print(f"  手动测试: 双击 {exe_path} 或运行: {exe_path.name}")
+            print(f"  Manual test: Double-click {exe_path} or run: {exe_path.name}")
         else:
-            print(f"  手动测试: ./{exe_path.name}")
+            print(f"  Manual test: ./{exe_path.name}")
         
         return True
         
     except PermissionError as e:
-        print(f"✗ 权限错误: {e}")
-        print(f"  注意: 这可能是由于防病毒软件或文件权限限制")
-        print(f"  请尝试手动运行可执行文件")
+        print(f"✗ Permission error: {e}")
+        print(f"  Note: This may be due to antivirus software or file permission restrictions")
+        print(f"  Please try running the executable manually")
         return False
     except Exception as e:
-        print(f"✗ 测试异常: {e}")
-        print(f"  注意: 自动化测试失败，但可执行文件可能仍然有效")
-        print(f"  请尝试手动运行: {exe_path}")
+        print(f"✗ Test exception: {e}")
+        print(f"  Note: Automated test failed, but the executable may still be valid")
+        print(f"  Please try running manually: {exe_path}")
         return False
 
 def create_launch_scripts():
-    """创建启动脚本（跨平台）"""
+    """Create launch scripts (cross-platform)"""
     print("=" * 60)
-    print("创建启动脚本...")
+    print("Creating launch scripts...")
     print("=" * 60)
     
     project_dir = Path(__file__).parent.absolute()
     
-    # 创建Unix启动脚本（macOS/Linux）
+    # Create Unix launch script (macOS/Linux)
     unix_launch_script = project_dir / "launch.command"
     
     unix_script_content = '''#!/bin/bash
 
-# Cipher工具启动脚本
+# Cipher tool launch script
 DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 
 echo "========================================"
-echo "Cipher加密工具启动"
+echo "Cipher Encryption Tool Launch"
 echo "========================================"
 echo ""
 
 if [ -f "$DIR/dist/Cipher" ]; then
-    echo "正在启动Cipher工具..."
+    echo "Starting Cipher tool..."
     "$DIR/dist/Cipher"
     echo ""
-    echo "Cipher工具已退出"
+    echo "Cipher tool has exited"
 else
-    echo "错误: 未找到可执行文件"
+    echo "Error: Executable not found"
     echo ""
-    echo "请先运行以下命令构建:"
+    echo "Please build first with:"
     echo "  python build.py --all"
-    echo "或:"
+    echo "or:"
     echo "  python build.py --install-deps --build"
     exit 1
 fi
@@ -426,35 +426,35 @@ fi
     with open(unix_launch_script, 'w', encoding='utf-8') as f:
         f.write(unix_script_content)
     
-    # 设置执行权限
+    # Set execute permission
     os.chmod(unix_launch_script, 0o755)
     
-    print(f"✓ Unix启动脚本已创建: {unix_launch_script}")
+    print(f"✓ Unix launch script created: {unix_launch_script}")
     
-    # 创建Windows启动脚本
+    # Create Windows launch script
     windows_launch_script = project_dir / "launch.bat"
     
     windows_script_content = '''@echo off
 chcp 65001 >nul
-REM Cipher工具启动脚本（Windows版）
+REM Cipher tool launch script (Windows version)
 
 echo ========================================
-echo Cipher加密工具启动
+echo Cipher Encryption Tool Launch
 echo ========================================
 echo.
 
 if exist "dist\\Cipher.exe" (
-    echo 正在启动Cipher工具...
+    echo Starting Cipher tool...
     echo.
     dist\\Cipher.exe
     echo.
-    echo Cipher工具已退出
+    echo Cipher tool has exited
 ) else (
-    echo 错误: 未找到可执行文件
+    echo Error: Executable not found
     echo.
-    echo 请先运行以下命令构建:
+    echo Please build first with:
     echo   python build.py --all
-    echo 或:
+    echo or:
     echo   python build.py --install-deps --build
     exit /b 1
 )
@@ -463,81 +463,81 @@ if exist "dist\\Cipher.exe" (
     with open(windows_launch_script, 'w', encoding='utf-8') as f:
         f.write(windows_script_content)
     
-    print(f"✓ Windows启动脚本已创建: {windows_launch_script}")
+    print(f"✓ Windows launch script created: {windows_launch_script}")
     
     return True
 
 def main():
-    parser = argparse.ArgumentParser(description="Cipher工具 - 简化构建脚本")
+    parser = argparse.ArgumentParser(description="Cipher - Simplified Build Script")
     
     parser.add_argument("--install-deps", action="store_true", 
-                       help="安装依赖 (pyinstaller, cryptography等)")
+                       help="Install dependencies (pyinstaller, cryptography, etc.)")
     parser.add_argument("--build", action="store_true", 
-                       help="执行构建")
+                       help="Execute build")
     parser.add_argument("--clean", action="store_true",
-                       help="清理旧的构建文件")
+                       help="Clean old build files")
     parser.add_argument("--test", action="store_true",
-                       help="测试构建结果")
+                       help="Test build result")
     parser.add_argument("--all", action="store_true",
-                       help="执行完整流程 (安装依赖、构建、测试)")
+                       help="Execute complete process (install dependencies, build, test)")
     parser.add_argument("--system-python", action="store_true",
-                       help="使用系统Python而不是虚拟环境")
+                       help="Use system Python instead of virtual environment")
     
     args = parser.parse_args()
     
-    # 如果指定了--all，设置所有选项
+    # If --all is specified, set all options
     if args.all:
         args.install_deps = True
         args.build = True
         args.test = True
         args.clean = True
     
-    # 如果没有指定任何操作，显示帮助
+    # If no action specified, show help
     if not any([args.install_deps, args.build, args.test, args.all]):
         parser.print_help()
-        print("\n示例:")
-        print("  完整构建: python build.py --all")
-        print("  仅安装依赖: python build.py --install-deps")
-        print("  仅构建: python build.py --build")
+        print("\nExamples:")
+        print("  Full build: python build.py --all")
+        print("  Install dependencies only: python build.py --install-deps")
+        print("  Build only: python build.py --build")
         return
     
     print("=" * 60)
-    print("Cipher工具 - 简化构建脚本")
+    print("Cipher - Simplified Build Script")
     print("=" * 60)
     
     success = True
     
     try:
-        # 检查环境
+        # Check environment
         if not check_environment():
             success = False
         
-        # 安装依赖
+        # Install dependencies
         if success and args.install_deps:
             if not install_dependencies(args.system_python):
                 success = False
         
-        # 更新spec文件
+        # Update spec file
         if success:
             update_spec_file()
         
-        # 构建
+        # Build
         if success and args.build:
             if not run_build(args.clean):
                 success = False
         
-        # 测试
+        # Test
         if success and args.test:
             if not test_build():
                 success = False
         
-        # 创建启动脚本
+        # Create launch scripts
         if success and args.build:
             create_launch_scripts()
         
         if success:
             print("=" * 60)
-            print("构建成功完成！ ✓")
+            print("Build completed successfully! ✓")
             print("=" * 60)
             
             system = platform.system()
@@ -547,28 +547,28 @@ def main():
                 exe_path = Path(__file__).parent.absolute() / "dist" / "Cipher"
                 
             if exe_path.exists():
-                print(f"可执行文件位置: {exe_path}")
+                print(f"Executable location: {exe_path}")
                 if system == "Windows":
-                    print(f"启动命令: dist\\Cipher.exe")
-                    print(f"或使用启动脚本: launch.bat")
+                    print(f"Start command: dist\\Cipher.exe")
+                    print(f"Or use launch script: launch.bat")
                 else:
-                    print(f"启动命令: ./dist/Cipher")
-                    print(f"或使用启动脚本: ./launch.command")
+                    print(f"Start command: ./dist/Cipher")
+                    print(f"Or use launch script: ./launch.command")
             else:
-                print("注意: 未生成可执行文件")
+                print("Note: No executable was generated")
             
             return 0
         else:
             print("=" * 60)
-            print("构建失败 ✗")
+            print("Build failed ✗")
             print("=" * 60)
             return 1
             
     except KeyboardInterrupt:
-        print("\n构建被用户中断")
+        print("\nBuild interrupted by user")
         return 1
     except Exception as e:
-        print(f"构建过程中发生错误: {e}")
+        print(f"Error occurred during build: {e}")
         import traceback
         traceback.print_exc()
         return 1
