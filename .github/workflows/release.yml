@@ -53,8 +53,8 @@ jobs:
           echo "VERSION=$VERSION" >> $GITHUB_OUTPUT
           echo "TAG_NAME=$VERSION" >> $GITHUB_OUTPUT
           
-          # Clean version for filenames
-          CLEAN_VERSION=$(echo "$VERSION" | sed 's/^v//' | sed 's/[^a-zA-Z0-9._-]/_/g')
+          # Clean version for filenames - keep dots for readability
+          CLEAN_VERSION=$(echo "$VERSION" | sed 's/^v//')
           echo "CLEAN_VERSION=$CLEAN_VERSION" >> $GITHUB_OUTPUT
           
           echo "Building version: $VERSION"
