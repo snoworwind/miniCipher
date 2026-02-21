@@ -102,12 +102,24 @@ def update_spec_file(target_architecture=None):
     system = platform.system()
     machine = platform.machine()
     
+    # Normalize machine architecture name
+    if machine == "AMD64" or machine == "x64":
+        machine = "x86_64"
+    
     # Determine target architecture
     if target_architecture:
         target_arch_value = target_architecture
     else:
         # Check environment variable for target architecture
         target_arch_value = os.environ.get('TARGET_ARCH') or machine
+    
+    # Normalize architecture names for PyInstaller compatibility
+    # GitHub Actions uses "x64" but PyInstaller expects "x86_64"
+    if target_arch_value == "x64":
+        target_arch_value = "x86_64"
+    elif target_arch_value == "arm64":
+        # arm64 is already the correct name for PyInstaller
+        pass
     
     if system == "Darwin":
         # macOS需要特殊处理，允许未签名应用运行

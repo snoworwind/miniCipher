@@ -39,6 +39,7 @@ jobs:
 
     env:
       PYTHONIOENCODING: utf-8
+      TARGET_ARCH: ${{ matrix.architecture }}
 
     runs-on: ${{ matrix.os }}
     name: Build on ${{ matrix.platform }}-${{ matrix.architecture }} (Python ${{ matrix.python-version }})
@@ -113,7 +114,7 @@ jobs:
       shell: bash
       run: |
         echo "Building on ${{ matrix.platform }} ${{ matrix.architecture }}..."
-        python build.py --clean --build --system-python
+        python build.py --clean --build --system-python --target-arch ${{ matrix.architecture }}
         
         # Verify build result based on platform
         echo "Verifying build for ${{ matrix.platform }}..."
