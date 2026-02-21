@@ -494,6 +494,67 @@ jobs:
         tree release-artifacts 2>/dev/null || find release-artifacts -type f | sort
         echo "=== END DEBUG ==="
 
+    - name: Check release files matching
+      shell: bash
+      run: |
+        echo "=== CHECKING FILE MATCHING ==="
+        echo ""
+        echo "Checking for Cipher-windows-x64.exe:"
+        find release-artifacts -type f -name "Cipher-windows-x64.exe" | sort
+        echo ""
+        echo "Checking for Cipher-macos-arm64:"
+        find release-artifacts -type f -name "Cipher-macos-arm64" | sort
+        echo ""
+        echo "Checking for Cipher-linux-x64:"
+        find release-artifacts -type f -name "Cipher-linux-x64" | sort
+        echo ""
+        echo "Checking for build-info-*.txt files:"
+        find release-artifacts -type f -name "build-info-*.txt" | sort
+        echo ""
+        echo "Checking for release-*.txt files:"
+        find release-artifacts -type f -name "release-*.txt" | sort
+        echo ""
+        echo "Verifying file counts:"
+        echo "Cipher-windows-x64.exe: $(find release-artifacts -type f -name "Cipher-windows-x64.exe" | wc -l)"
+        echo "Cipher-macos-arm64: $(find release-artifacts -type f -name "Cipher-macos-arm64" | wc -l)"
+        echo "Cipher-linux-x64: $(find release-artifacts -type f -name "Cipher-linux-x64" | wc -l)"
+        echo "build-info-*.txt: $(find release-artifacts -type f -name "build-info-*.txt" | wc -l)"
+        echo "release-*.txt: $(find release-artifacts -type f -name "release-*.txt" | wc -l)"
+        echo ""
+        echo "Checking for duplicates (should be 1 for each executable):"
+        WINDOWS_COUNT=$(find release-artifacts -type f -name "Cipher-windows-x64.exe" | wc -l)
+        MACOS_COUNT=$(find release-artifacts -type f -name "Cipher-macos-arm64" | wc -l)
+        LINUX_COUNT=$(find release-artifacts -type f -name "Cipher-linux-x64" | wc -l)
+        
+        if [ "$WINDOWS_COUNT" -gt 1 ]; then
+          echo "⚠️ WARNING: Cipher-windows-x64.exe found $WINDOWS_COUNT times (expected 1)"
+          echo "This may cause duplicate uploads and release errors"
+        fi
+        if [ "$MACOS_COUNT" -gt 1 ]; then
+          echo "⚠️ WARNING: Cipher-macos-arm64 found $MACOS_COUNT times (expected 1)"
+          echo "This may cause duplicate uploads and release errors"
+        fi
+        if [ "$LINUX_COUNT" -gt 1 ]; then
+          echo "⚠️ WARNING: Cipher-linux-x64 found $LINUX_COUNT times (expected 1)"
+          echo "This may cause duplicate uploads and release errors"
+        fi
+        
+        echo ""
+        echo "Checking if files will be matched by release action patterns:"
+        echo "Testing pattern: release-artifacts/**/dist/Cipher-windows-x64.exe"
+        find release-artifacts -path "*/dist/Cipher-windows-x64.exe" 2>/dev/null | while read file; do
+          echo "  ✓ Found: $file"
+        done
+        echo "Testing pattern: release-artifacts/**/dist/Cipher-macos-arm64"
+        find release-artifacts -path "*/dist/Cipher-macos-arm64" 2>/dev/null | while read file; do
+          echo "  ✓ Found: $file"
+        done
+        echo "Testing pattern: release-artifacts/**/dist/Cipher-linux-x64"
+        find release-artifacts -path "*/dist/Cipher-linux-x64" 2>/dev/null | while read file; do
+          echo "  ✓ Found: $file"
+        done
+        echo "=== END CHECKING ==="
+
     - name: Create Release
       uses: softprops/action-gh-release@v2
       env:
@@ -505,9 +566,11 @@ jobs:
         draft: false
         prerelease: ${{ contains(github.ref_name, '-') }}  # Mark as prerelease if tag contains '-'
         files: |
-          release-artifacts/**/dist/*.exe
-          release-artifacts/**/dist/Cipher-*
-          release-artifacts/**/*.txt
+          release-artifacts/**/dist/Cipher-windows-x64.exe
+          release-artifacts/**/dist/Cipher-macos-arm64
+          release-artifacts/**/dist/Cipher-linux-x64
+          release-artifacts/**/build-info-*.txt
+          release-artifacts/**/release-*.txt
         fail_on_unmatched_files: false
 
   notify:
