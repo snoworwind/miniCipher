@@ -72,7 +72,7 @@ def install_dependencies(use_system_python=False):
         print("  pip install pyinstaller cryptography")
         return False
 
-def update_spec_file():
+def update_spec_file(target_architecture=None):
     """Update or create spec file - enhanced version that always generates fresh spec file"""
     print("=" * 60)
     print("Updating spec file...")
@@ -80,6 +80,11 @@ def update_spec_file():
     
     project_dir = Path(__file__).parent.absolute()
     spec_file = project_dir / "cipher.spec"
+    
+    # Always remove old spec file to ensure fresh generation
+    if spec_file.exists():
+        print(f"Removing old spec file: {spec_file}")
+        spec_file.unlink()
     
     # Create enhanced spec file content with proper path escaping
     project_dir_str = str(project_dir)
@@ -90,25 +95,46 @@ def update_spec_file():
         # Windows paths: need double backslashes for Python string literals
         project_dir_escaped = project_dir_str.replace('\\', '\\\\')
     else:
-        # Linux/Mac paths: no escaping needed
-        project_dir_escaped = project_dir_str
+        # Linux/Mac paths: use forward slashes
+        project_dir_escaped = project_dir_str.replace('\\', '/')
     
     # Platform-specific configurations
     system = platform.system()
     machine = platform.machine()
     
+    # Determine target architecture
+    if target_architecture:
+        target_arch_value = target_architecture
+    else:
+        # Check environment variable for target architecture
+        target_arch_value = os.environ.get('TARGET_ARCH') or machine
+    
     if system == "Darwin":
         # macOS需要特殊处理，允许未签名应用运行
         codesign_config = "codesign_identity='-',"
         argv_emulation = "argv_emulation=True,"
-        target_arch = f"target_arch='{machine}',"
-        print(f"macOS detected, using platform-specific config for {machine}")
+        
+        # Handle cross-architecture building on macOS
+        if target_arch_value == "x86_64" and machine == "arm64":
+            print(f"macOS detected: building x86_64 on {machine} (cross-architecture)")
+            target_arch = "target_arch='x86_64',"
+        elif target_arch_value == "arm64" and machine == "x86_64":
+            print(f"macOS detected: building arm64 on {machine} (cross-architecture)")
+            target_arch = "target_arch='arm64',"
+        else:
+            print(f"macOS detected, using platform-specific config for {target_arch_value}")
+            target_arch = f"target_arch='{target_arch_value}',"
+        
+        # macOS uses single-file bundle, so no COLLECT needed
+        macos_template = True
     else:
         codesign_config = "codesign_identity=None,"
         argv_emulation = "argv_emulation=False,"
         target_arch = "target_arch=None,"
+        macos_template = False
     
-    spec_content = f'''# -*- mode: python ; coding: utf-8 -*-
+    # Base template for all platforms
+    base_spec_content = f'''# -*- mode: python ; coding: utf-8 -*-
 # Cipher - PyInstaller spec file
 # Auto-generated, includes all necessary dependencies and configuration
 
@@ -178,7 +204,14 @@ exe = EXE(
     {target_arch}
     {codesign_config}
     entitlements_file=None,
-)
+)'''
+    
+    # Add COLLECT only for non-macOS platforms
+    if macos_template:
+        spec_content = base_spec_content
+        print("Using single-file bundle template for macOS")
+    else:
+        spec_content = base_spec_content + '''
 
 coll = COLLECT(
     exe,
@@ -473,6 +506,8 @@ def main():
                        help="Execute complete process (install dependencies, build, test)")
     parser.add_argument("--system-python", action="store_true",
                        help="Use system Python instead of virtual environment")
+    parser.add_argument("--target-arch", type=str, default=None,
+                       help="Target architecture for cross-compilation (e.g., x86_64, arm64)")
     
     args = parser.parse_args()
     
@@ -510,7 +545,7 @@ def main():
         
         # Update spec file
         if success:
-            update_spec_file()
+            update_spec_file(args.target_arch)
         
         # Build
         if success and args.build:
