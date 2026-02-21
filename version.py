@@ -2,6 +2,7 @@
 """
 Version management script - for GitHub Actions automated builds
 Auto-generates version numbers with incremental version management
+Dynamic version system: Version is primarily derived from git tags
 """
 
 import os
@@ -9,12 +10,6 @@ import sys
 import subprocess
 import datetime
 from pathlib import Path
-
-# Project version constants - single source of truth for version information
-PROJECT_VERSION_MAJOR = 1
-PROJECT_VERSION_MINOR = 0
-PROJECT_VERSION_PATCH = 0
-PROJECT_VERSION = f"v{PROJECT_VERSION_MAJOR}.{PROJECT_VERSION_MINOR}.{PROJECT_VERSION_PATCH}"
 
 # For datetime.utcnow() deprecation - use timezone-aware UTC
 try:
@@ -25,8 +20,15 @@ except ImportError:
     from datetime import timezone
     UTC = timezone.utc
 
+# Default fallback version constants - used only when git is not available
+# These should match the latest release tag to ensure consistency
+DEFAULT_VERSION_MAJOR = 1
+DEFAULT_VERSION_MINOR = 0
+DEFAULT_VERSION_PATCH = 1  # Updated to match current tag v1.0.1
+DEFAULT_VERSION = f"v{DEFAULT_VERSION_MAJOR}.{DEFAULT_VERSION_MINOR}.{DEFAULT_VERSION_PATCH}"
+
 def get_git_info():
-    """Get git repository information"""
+    """Get git repository information with improved error handling"""
     try:
         # Get current commit hash
         commit_hash = subprocess.check_output(
@@ -62,13 +64,69 @@ def get_git_info():
             'branch': branch
         }
     except Exception as e:
-        print(f"Failed to get git info: {e}")
+        print(f"Warning: Failed to get git info: {e}")
+        # Return sensible defaults instead of "unknown"
         return {
-            'commit_hash': 'unknown',
+            'commit_hash': 'nogit',
             'commit_count': '0',
             'tag': None,
-            'branch': 'unknown'
+            'branch': 'nogit'
         }
+
+def parse_version_from_tag(tag):
+    """
+    Parse version from git tag string
+    Example: 'v1.0.1' -> (1, 0, 1)
+    """
+    if tag and tag.startswith('v'):
+        tag_version = tag[1:]  # Remove 'v' prefix
+        version_parts = tag_version.split('.')
+        if len(version_parts) >= 3:
+            try:
+                major = int(version_parts[0])
+                minor = int(version_parts[1])
+                patch = int(version_parts[2])
+                return major, minor, patch
+            except ValueError:
+                pass
+    return None
+
+def get_version_from_git():
+    """
+    Get version from git tag, fallback to default if not available
+    Returns version string like 'v1.0.1'
+    """
+    git_info = get_git_info()
+    tag = git_info['tag']
+    
+    if tag:
+        version_parts = parse_version_from_tag(tag)
+        if version_parts:
+            major, minor, patch = version_parts
+            return f"v{major}.{minor}.{patch}"
+    
+    # Fallback to default version
+    return DEFAULT_VERSION
+
+def get_version_parts():
+    """
+    Get version parts (major, minor, patch) from git tag
+    Returns tuple (major, minor, patch)
+    """
+    version_str = get_version_from_git()
+    # Remove 'v' prefix if present
+    if version_str.startswith('v'):
+        version_str = version_str[1:]
+    
+    parts = version_str.split('.')
+    if len(parts) >= 3:
+        try:
+            return int(parts[0]), int(parts[1]), int(parts[2])
+        except ValueError:
+            pass
+    
+    # Fallback to default parts
+    return DEFAULT_VERSION_MAJOR, DEFAULT_VERSION_MINOR, DEFAULT_VERSION_PATCH
 
 def generate_version_number(git_info, build_type='dev'):
     """
@@ -81,38 +139,32 @@ def generate_version_number(git_info, build_type='dev'):
     - dev: Development version (CI build)
     - release: Release version (tag build)
     """
-    # Base version (can be read from file, here using fixed values)
-    major = 1
-    minor = 0
-    patch = 0
-    
-    # If tag exists, use tag as version base
-    if git_info['tag'] and git_info['tag'].startswith('v'):
-        # Parse tag version
-        tag_version = git_info['tag'][1:]  # Remove 'v' prefix
-        version_parts = tag_version.split('.')
-        if len(version_parts) >= 3:
-            try:
-                major = int(version_parts[0])
-                minor = int(version_parts[1])
-                patch = int(version_parts[2])
-            except ValueError:
-                pass
+    # Get version from git tag first, fallback to defaults
+    version_parts = parse_version_from_tag(git_info['tag'])
+    if version_parts:
+        major, minor, patch = version_parts
+    else:
+        major = DEFAULT_VERSION_MAJOR
+        minor = DEFAULT_VERSION_MINOR
+        patch = DEFAULT_VERSION_PATCH
     
     # Build metadata part
     build_date = datetime.datetime.now(UTC).strftime('%Y-%m-%d')
     commit_count = git_info['commit_count']
-    commit_hash = git_info['commit_hash'][:8]  # Take first 8 characters
+    commit_hash = git_info['commit_hash'][:8] if git_info['commit_hash'] != 'nogit' else 'nogit'
     
     # Determine build type
     if build_type == 'release':
-        # Release version
+        # Release version - use tag version without metadata
         version = f"v{major}.{minor}.{patch}"
     else:
         # Development version - incremental version number
         if build_type == 'dev':
-            # Development version increments patch version
-            patch = int(commit_count)
+            # Development version increments patch version based on commit count
+            try:
+                patch = int(commit_count) if commit_count.isdigit() else DEFAULT_VERSION_PATCH
+            except ValueError:
+                patch = DEFAULT_VERSION_PATCH
             version = f"v{major}.{minor}.{patch}+{build_type}.{build_date}.{commit_hash}"
         else:
             version = f"v{major}.{minor}.{patch}+{build_type}.{build_date}.{commit_hash}"
@@ -164,12 +216,19 @@ def inject_version_into_executable():
         git_info = get_git_info()
         version = generate_version_number(git_info)
         
-        content = f'''
-"""
+        # Get version parts for the injection
+        major, minor, patch = get_version_parts()
+        
+        content = f'''"""
 Auto-generated version information - for injection into executable
+Dynamic version system: Version derived from git tags or defaults
 """
 
+# Core version information - dynamically determined
 VERSION = "{version}"
+MAJOR_VERSION = {major}
+MINOR_VERSION = {minor}
+PATCH_VERSION = {patch}
 BUILD_DATE = "{datetime.datetime.now(UTC).isoformat()}Z"
 COMMIT_HASH = "{git_info['commit_hash']}"
 COMMIT_COUNT = "{git_info['commit_count']}"
@@ -179,11 +238,22 @@ def get_version():
     """Get version information"""
     return {{
         "version": VERSION,
+        "major": MAJOR_VERSION,
+        "minor": MINOR_VERSION,
+        "patch": PATCH_VERSION,
         "build_date": BUILD_DATE,
         "commit_hash": COMMIT_HASH,
         "commit_count": COMMIT_COUNT,
         "branch": BRANCH
     }}
+
+def get_version_string():
+    """Get version string for display"""
+    return VERSION
+
+def get_version_info():
+    """Get complete version info for UI display"""
+    return get_version()
 
 if __name__ == "__main__":
     print(VERSION)
