@@ -11,25 +11,15 @@ jobs:
   build:
     strategy:
       matrix:
-        os: [windows-latest, ubuntu-latest]
-        python-version: ['3.9', '3.10', '3.11']
-        exclude:
-          - os: windows-latest
-            python-version: '3.9'  # Test only latest Python version on Windows
-          - os: ubuntu-latest
-            python-version: '3.9'  # Test only latest Python version on Linux
+        os: [windows-latest]
+        python-version: ['3.11']
         include:
-          # Main build configuration - one build per platform
+          # Main build configuration - Windows only
           - os: windows-latest
             python-version: '3.11'
             platform: windows
             architecture: x64
             output_name: Cipher-windows-x64.exe
-          - os: ubuntu-latest
-            python-version: '3.11'
-            platform: linux
-            architecture: x64
-            output_name: Cipher-linux-x64
 
     env:
       PYTHONIOENCODING: utf-8
@@ -53,14 +43,6 @@ jobs:
         key: ${{ runner.os }}-pip-${{ hashFiles('requirements.txt') }}
         restore-keys: |
           ${{ runner.os }}-pip-
-
-    - name: Install system dependencies (Ubuntu)
-      if: runner.os == 'Linux'
-      shell: bash
-      run: |
-        echo "Installing system dependencies for Ubuntu..."
-        sudo apt-get update
-        sudo apt-get install -y python3-tk python3-dev libssl-dev build-essential
 
     - name: Generate version information
       id: version
@@ -95,24 +77,13 @@ jobs:
         python build.py --clean --build --system-python
         
         # Verify build result
-        if [ "${{ matrix.platform }}" = "windows" ]; then
-          if [ -f "dist/Cipher.exe" ]; then
-            echo "Build successful: dist/Cipher.exe"
-            ls -la dist/
-          else
-            echo "ERROR: Cipher.exe not found!"
-            ls -la dist/ || true
-            exit 1
-          fi
+        if [ -f "dist/Cipher.exe" ]; then
+          echo "Build successful: dist/Cipher.exe"
+          ls -la dist/
         else
-          if [ -f "dist/Cipher" ]; then
-            echo "Build successful: dist/Cipher"
-            ls -la dist/
-          else
-            echo "ERROR: Cipher binary not found!"
-            ls -la dist/ || true
-            exit 1
-          fi
+          echo "ERROR: Cipher.exe not found!"
+          ls -la dist/ || true
+          exit 1
         fi
 
     - name: Test build
@@ -125,16 +96,9 @@ jobs:
       run: |
         echo "Preparing artifact: ${{ matrix.output_name }}"
         
-        if [ "${{ matrix.platform }}" = "windows" ]; then
-          # Windows: rename exe file
-          cp dist/Cipher.exe dist/${{ matrix.output_name }}
-          echo "Artifact prepared: ${{ matrix.output_name }}"
-        else
-          # Linux: rename and ensure executable permissions
-          cp dist/Cipher dist/${{ matrix.output_name }}
-          chmod +x dist/${{ matrix.output_name }}
-          echo "Artifact prepared: ${{ matrix.output_name }}"
-        fi
+        # Windows: rename exe file
+        cp dist/Cipher.exe dist/${{ matrix.output_name }}
+        echo "Artifact prepared: ${{ matrix.output_name }}"
         
         # Copy version file
         cp version.txt dist/version-${{ matrix.platform }}-${{ matrix.architecture }}.txt
@@ -176,14 +140,6 @@ jobs:
         key: ${{ runner.os }}-pip-${{ hashFiles('requirements.txt') }}
         restore-keys: |
           ${{ runner.os }}-pip-
-
-    - name: Install system dependencies (Ubuntu)
-      if: runner.os == 'Linux'
-      shell: bash
-      run: |
-        echo "Installing system dependencies for Ubuntu..."
-        sudo apt-get update
-        sudo apt-get install -y python3-tk python3-dev libssl-dev build-essential
 
     - name: Install dependencies
       run: |

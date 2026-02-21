@@ -16,11 +16,6 @@ jobs:
             architecture: x64
             output_name: Cipher-windows-x64.exe
             asset_name: cipher-windows-x64.exe
-          - os: ubuntu-latest
-            platform: linux
-            architecture: x64
-            output_name: Cipher-linux-x64
-            asset_name: cipher-linux-x64
 
     env:
       PYTHONIOENCODING: utf-8
@@ -68,13 +63,6 @@ jobs:
         restore-keys: |
           ${{ runner.os }}-pip-
 
-    - name: Install system dependencies (Ubuntu)
-      if: runner.os == 'Linux'
-      shell: bash
-      run: |
-        echo "Installing system dependencies for Ubuntu..."
-        sudo apt-get update
-        sudo apt-get install -y python3-tk python3-dev libssl-dev build-essential
 
     - name: Generate build info
       shell: bash
@@ -115,21 +103,12 @@ jobs:
         python build.py --clean --build --system-python
         
         # Verify build
-        if [ "${{ matrix.platform }}" = "windows" ]; then
-          if [ ! -f "dist/Cipher.exe" ]; then
-            echo "ERROR: Cipher.exe not found!"
-            ls -la dist/ || true
-            exit 1
-          fi
-          echo "Build successful: dist/Cipher.exe"
-        else
-          if [ ! -f "dist/Cipher" ]; then
-            echo "ERROR: Cipher binary not found!"
-            ls -la dist/ || true
-            exit 1
-          fi
-          echo "Build successful: dist/Cipher"
+        if [ ! -f "dist/Cipher.exe" ]; then
+          echo "ERROR: Cipher.exe not found!"
+          ls -la dist/ || true
+          exit 1
         fi
+        echo "Build successful: dist/Cipher.exe"
 
     - name: Test build
       run: |
@@ -142,14 +121,8 @@ jobs:
         echo "Preparing release assets..."
         
         # Rename files
-        if [ "${{ matrix.platform }}" = "windows" ]; then
-          cp dist/Cipher.exe dist/${{ matrix.output_name }}
-          RELEASE_FILE="dist/${{ matrix.output_name }}"
-        else
-          cp dist/Cipher dist/${{ matrix.output_name }}
-          chmod +x dist/${{ matrix.output_name }}
-          RELEASE_FILE="dist/${{ matrix.output_name }}"
-        fi
+        cp dist/Cipher.exe dist/${{ matrix.output_name }}
+        RELEASE_FILE="dist/${{ matrix.output_name }}"
         
         # Calculate SHA256
         if command -v sha256sum > /dev/null 2>&1; then
@@ -179,7 +152,6 @@ jobs:
         Installation:
         -------------
         Windows: Double-click ${{ matrix.output_name }} or run from command line
-        Linux: Run ./${{ matrix.output_name }} from terminal
         
         Source code: https://github.com/${{ github.repository }}
         EOF
@@ -255,11 +227,6 @@ jobs:
         echo "### Windows" >> release-notes.md
         echo "1. Download `cipher-windows-x64.exe`" >> release-notes.md
         echo "2. Double-click to run" >> release-notes.md
-        echo "" >> release-notes.md
-        echo "### Linux" >> release-notes.md
-        echo "1. Download `cipher-linux-x64`" >> release-notes.md
-        echo "2. Run: `chmod +x cipher-linux-x64`" >> release-notes.md
-        echo "3. Run: `./cipher-linux-x64`" >> release-notes.md
         echo "" >> release-notes.md
         
         if [ -n "$PREVIOUS_TAG" ]; then
