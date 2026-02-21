@@ -16,19 +16,19 @@ jobs:
             platform: windows
             architecture: x64
             output_name: Cipher-windows-x64.exe
-            asset_name: cipher-windows-x64.exe
+            asset_name: Cipher-windows-x64.exe
           # macOS configuration (Apple Silicon only)
           - os: macos-latest
             platform: macos
             architecture: arm64
             output_name: Cipher-macos-arm64
-            asset_name: cipher-macos-arm64
+            asset_name: Cipher-macos-arm64
           # Linux configuration
           - os: ubuntu-latest
             platform: linux
             architecture: x64
             output_name: Cipher-linux-x64
-            asset_name: cipher-linux-x64
+            asset_name: Cipher-linux-x64
 
     env:
       PYTHONIOENCODING: utf-8
@@ -325,17 +325,17 @@ jobs:
         echo "## Installation" >> release-notes.md
         echo "" >> release-notes.md
         echo "### Windows" >> release-notes.md
-        echo "1. Download `cipher-windows-x64.exe`" >> release-notes.md
+        echo "1. Download `Cipher-windows-x64.exe`" >> release-notes.md
         echo "2. Double-click to run" >> release-notes.md
         echo "" >> release-notes.md
         echo "### macOS (Apple Silicon)" >> release-notes.md
-        echo "1. Download `cipher-macos-arm64`" >> release-notes.md
-        echo "2. Right-click the file and select 'Open', or run `./cipher-macos-arm64` from terminal" >> release-notes.md
+        echo "1. Download `Cipher-macos-arm64`" >> release-notes.md
+        echo "2. Right-click the file and select 'Open', or run `./Cipher-macos-arm64` from terminal" >> release-notes.md
         echo "" >> release-notes.md
         echo "### Linux" >> release-notes.md
-        echo "1. Download `cipher-linux-x64`" >> release-notes.md
-        echo "2. Make executable: `chmod +x cipher-linux-x64`" >> release-notes.md
-        echo "3. Run: `./cipher-linux-x64`" >> release-notes.md
+        echo "1. Download `Cipher-linux-x64`" >> release-notes.md
+        echo "2. Make executable: `chmod +x Cipher-linux-x64`" >> release-notes.md
+        echo "3. Run: `./Cipher-linux-x64`" >> release-notes.md
         echo "" >> release-notes.md
         
         if [ -n "$PREVIOUS_TAG" ]; then
@@ -432,7 +432,7 @@ jobs:
       run: |
         TAG="${{ github.ref_name }}"
         if [ -n "$TAG" ]; then
-          # 检查release是否存在
+          # Check if release exists
           echo "Checking if release exists for tag: $TAG"
           RESPONSE=$(curl -s -w "%{http_code}" \
             -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
@@ -447,7 +447,7 @@ jobs:
             RELEASE_ID=$(echo "$RESPONSE" | head -n -1 | grep -o '"id":[0-9]*' | cut -d: -f2)
             echo "Release ID: $RELEASE_ID"
             
-            # 删除release
+            # Delete release
             DELETE_RESPONSE=$(curl -s -w "%{http_code}" -X DELETE \
               -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
               -H "Accept: application/vnd.github.v3+json" \
@@ -456,15 +456,43 @@ jobs:
             DELETE_CODE=$(echo "$DELETE_RESPONSE" | tail -1)
             if [ "$DELETE_CODE" = "204" ]; then
               echo "✓ Existing release deleted successfully"
+              # Wait a moment for GitHub API to propagate
+              echo "Waiting 5 seconds for GitHub API propagation..."
+              sleep 5
             else
-              echo "⚠️ Failed to delete existing release, but will continue (response code: $DELETE_CODE)"
+              echo "⚠️ Failed to delete existing release (response code: $DELETE_CODE)"
+              echo "This may cause issues if release already exists"
             fi
+          elif [ "$HTTP_CODE" = "404" ]; then
+            echo "✓ No existing release found for tag $TAG"
           else
-            echo "No existing release found for tag $TAG"
+            echo "⚠️ Unexpected API response code: $HTTP_CODE"
+            echo "Will continue with release creation assuming no existing release"
           fi
         else
           echo "No tag specified, skipping release check"
         fi
+
+    - name: Debug file paths before release
+      shell: bash
+      run: |
+        echo "=== DEBUG: Checking release artifact paths ==="
+        echo "Current directory: $(pwd)"
+        echo ""
+        echo "All files in release-artifacts directory:"
+        find release-artifacts -type f | sort
+        echo ""
+        echo "Looking for executable files:"
+        find release-artifacts -type f -name "*.exe" | sort
+        find release-artifacts -type f -name "Cipher-*" | sort
+        find release-artifacts -type f -name "Cipher*" | sort
+        echo ""
+        echo "Looking for text files:"
+        find release-artifacts -type f -name "*.txt" | sort
+        echo ""
+        echo "Directory tree structure:"
+        tree release-artifacts 2>/dev/null || find release-artifacts -type f | sort
+        echo "=== END DEBUG ==="
 
     - name: Create Release
       uses: softprops/action-gh-release@v2
@@ -480,6 +508,7 @@ jobs:
           release-artifacts/**/dist/*.exe
           release-artifacts/**/dist/Cipher-*
           release-artifacts/**/*.txt
+        fail_on_unmatched_files: false
 
   notify:
     runs-on: ubuntu-latest
