@@ -98,7 +98,7 @@ a = Analysis(
     binaries=[],
     datas=[],
     hiddenimports=[
-        # cryptography相关导入
+        # cryptography-related imports
         'cryptography',
         'cryptography.hazmat',
         'cryptography.hazmat.backends',
@@ -112,7 +112,7 @@ a = Analysis(
         'cryptography.hazmat.primitives.kdf.pbkdf2',
         'cryptography.hazmat.primitives.hashes',
         'cryptography.hazmat.primitives.ciphers.aead',
-        # 标准库导入
+        # standard library imports
         'tkinter',
         'tkinter.filedialog',
         'tkinter.messagebox',
