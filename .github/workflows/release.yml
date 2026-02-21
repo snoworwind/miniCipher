@@ -191,6 +191,24 @@ jobs:
       with:
         path: release-artifacts
 
+    - name: Debug downloaded artifacts
+      shell: bash
+      run: |
+        echo "Artifacts directory structure:"
+        find release-artifacts -type f -name "*" | sort
+        echo ""
+        echo "Files that match *.exe pattern:"
+        find release-artifacts -type f -name "*.exe" | sort
+        echo ""
+        echo "Files that match Cipher-* pattern:"
+        find release-artifacts -type f -name "Cipher-*" | sort
+        echo ""
+        echo "Files that match *.txt pattern:"
+        find release-artifacts -type f -name "*.txt" | sort
+        echo ""
+        echo "Full tree structure:"
+        tree release-artifacts || ls -laR release-artifacts
+
     - name: Generate release notes
       shell: bash
       run: |
@@ -261,7 +279,6 @@ jobs:
         prerelease: ${{ contains(github.ref_name, '-') }}  # Mark as prerelease if tag contains '-'
         files: |
           release-artifacts/**/*.exe
-          release-artifacts/**/Cipher-*
           release-artifacts/**/*.txt
 
   notify:
