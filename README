@@ -26,6 +26,7 @@ MINICIPHER - 文件加密/解密工具
 * Python 3.7 或更高版本
 * 依赖包：cryptography >= 42.0.0
 * tkinter（通常Python自带，部分系统可能需要单独安装）
+* 跨平台支持：Windows、macOS、Linux
 
 快速开始
 =========
@@ -38,7 +39,9 @@ MINICIPHER - 文件加密/解密工具
 
 3. 或者使用构建的可执行文件：
    python build.py --all
-   然后运行 ./dist/Cipher（或使用 ./launch.command）
+   然后运行：
+   * Windows: launch.bat
+   * macOS/Linux: ./launch.command 或 ./dist/Cipher
 
 使用方法
 =========
@@ -102,6 +105,10 @@ MINICIPHER - 文件加密/解密工具
 * --clean：清理旧的构建文件
 * --test：测试构建结果
 * --all：完整流程（安装依赖、构建、测试）
+
+构建完成后，可以使用以下启动脚本：
+* Windows: launch.bat
+* macOS/Linux: launch.command
 
 许可证
 ======

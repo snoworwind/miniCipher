@@ -81,26 +81,94 @@ def update_spec_file():
     project_dir = Path(__file__).parent.absolute()
     spec_file = project_dir / "cipher.spec"
     
-    # 读取现有spec文件
-    if spec_file.exists():
-        with open(spec_file, 'r', encoding='utf-8') as f:
-            spec_content = f.read()
+    # 如果spec文件不存在，创建它
+    if not spec_file.exists():
+        print(f"创建新的spec文件: {spec_file}")
         
-        # 修复noarchive设置（从True改为False以减小文件大小）
-        if "noarchive=True" in spec_content:
-            spec_content = spec_content.replace("noarchive=True", "noarchive=False")
-            print("已修复noarchive设置: True → False")
-        elif "noarchive = True" in spec_content:
-            spec_content = spec_content.replace("noarchive = True", "noarchive = False")
-            print("已修复noarchive设置: True → False")
+        # 创建基本的spec文件内容
+        spec_content = '''# -*- mode: python ; coding: utf-8 -*-
+
+block_cipher = None
+
+a = Analysis(
+    ['main.py'],
+    pathex=[],
+    binaries=[],
+    datas=[],
+    hiddenimports=[
+        'cryptography.hazmat.backends.openssl.backend',
+        'cryptography.hazmat.backends.openssl',
+        'cryptography.hazmat.primitives.ciphers.algorithms',
+        'cryptography.hazmat.primitives.ciphers.modes',
+        'cryptography.hazmat.primitives.kdf.pbkdf2',
+        'cryptography.hazmat.primitives.hashes',
+        'cryptography.hazmat.primitives.ciphers.aead',
+    ],
+    hookspath=[],
+    hooksconfig={},
+    runtime_hooks=[],
+    excludes=[],
+    noarchive=False,
+    optimize=0,
+)
+pyz = PYZ(a.pure)
+
+exe = EXE(
+    pyz,
+    a.scripts,
+    a.binaries,
+    a.datas,
+    [],
+    name='Cipher',
+    debug=False,
+    bootloader_ignore_signals=False,
+    strip=False,
+    upx=True,
+    upx_exclude=[],
+    runtime_tmpdir=None,
+    console=False,
+    disable_windowed_traceback=False,
+    argv_emulation=False,
+    target_arch=None,
+    codesign_identity=None,
+    entitlements_file=None,
+    icon=[],
+    version='1.0.0',
+)
+
+coll = COLLECT(
+    exe,
+    a.binaries,
+    a.datas,
+    strip=False,
+    upx=True,
+    upx_exclude=[],
+    name='Cipher',
+)'''
         
-        # 写入更新后的spec文件
         with open(spec_file, 'w', encoding='utf-8') as f:
             f.write(spec_content)
         
-        print(f"spec文件已更新: {spec_file}")
-    else:
-        print(f"使用现有spec文件: {spec_file}")
+        print(f"✓ spec文件已创建: {spec_file}")
+        return True
+    
+    # 读取现有spec文件
+    with open(spec_file, 'r', encoding='utf-8') as f:
+        spec_content = f.read()
+    
+    # 修复noarchive设置（从True改为False以减小文件大小）
+    if "noarchive=True" in spec_content:
+        spec_content = spec_content.replace("noarchive=True", "noarchive=False")
+        print("已修复noarchive设置: True → False")
+    elif "noarchive = True" in spec_content:
+        spec_content = spec_content.replace("noarchive = True", "noarchive = False")
+        print("已修复noarchive设置: True → False")
+    
+    # 写入更新后的spec文件
+    with open(spec_file, 'w', encoding='utf-8') as f:
+        f.write(spec_content)
+    
+    print(f"✓ spec文件已更新: {spec_file}")
     
     return True
 
@@ -196,15 +264,18 @@ def test_build():
         print(f"✗ 测试异常: {e}")
         return False
 
-def create_launch_script():
-    """创建启动脚本"""
+def create_launch_scripts():
+    """创建启动脚本（跨平台）"""
     print("=" * 60)
     print("创建启动脚本...")
     print("=" * 60)
     
-    launch_script = Path(__file__).parent.absolute() / "launch.command"
+    project_dir = Path(__file__).parent.absolute()
     
-    script_content = '''#!/bin/bash
+    # 创建Unix启动脚本（macOS/Linux）
+    unix_launch_script = project_dir / "launch.command"
+    
+    unix_script_content = '''#!/bin/bash
 
 # Cipher工具启动脚本
 DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
@@ -230,13 +301,48 @@ else
 fi
 '''
     
-    with open(launch_script, 'w', encoding='utf-8') as f:
-        f.write(script_content)
+    with open(unix_launch_script, 'w', encoding='utf-8') as f:
+        f.write(unix_script_content)
     
     # 设置执行权限
-    os.chmod(launch_script, 0o755)
+    os.chmod(unix_launch_script, 0o755)
     
-    print(f"✓ 启动脚本已创建: {launch_script}")
+    print(f"✓ Unix启动脚本已创建: {unix_launch_script}")
+    
+    # 创建Windows启动脚本
+    windows_launch_script = project_dir / "launch.bat"
+    
+    windows_script_content = '''@echo off
+chcp 65001 >nul
+REM Cipher工具启动脚本（Windows版）
+
+echo ========================================
+echo Cipher加密工具启动
+echo ========================================
+echo.
+
+if exist "dist\\Cipher.exe" (
+    echo 正在启动Cipher工具...
+    echo.
+    dist\\Cipher.exe
+    echo.
+    echo Cipher工具已退出
+) else (
+    echo 错误: 未找到可执行文件
+    echo.
+    echo 请先运行以下命令构建:
+    echo   python build.py --all
+    echo 或:
+    echo   python build.py --install-deps --build
+    exit /b 1
+)
+'''
+    
+    with open(windows_launch_script, 'w', encoding='utf-8') as f:
+        f.write(windows_script_content)
+    
+    print(f"✓ Windows启动脚本已创建: {windows_launch_script}")
+    
     return True
 
 def main():
@@ -305,7 +411,7 @@ def main():
         
         # 创建启动脚本
         if success and args.build:
-            create_launch_script()
+            create_launch_scripts()
         
         if success:
             print("=" * 60)
