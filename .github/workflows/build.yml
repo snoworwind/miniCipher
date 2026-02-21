@@ -18,13 +18,7 @@ jobs:
             platform: windows
             architecture: x64
             output_name: Cipher-windows-x64.exe
-          # macOS configuration (Intel)
-          - os: macos-latest
-            python-version: '3.11'
-            platform: macos
-            architecture: x64
-            output_name: Cipher-macos-x64
-          # macOS configuration (Apple Silicon)
+          # macOS configuration (Apple Silicon only)
           - os: macos-latest
             python-version: '3.11'
             platform: macos

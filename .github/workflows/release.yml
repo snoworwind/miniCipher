@@ -17,13 +17,7 @@ jobs:
             architecture: x64
             output_name: Cipher-windows-x64.exe
             asset_name: cipher-windows-x64.exe
-          # macOS configuration (Intel)
-          - os: macos-latest
-            platform: macos
-            architecture: x64
-            output_name: Cipher-macos-x64
-            asset_name: cipher-macos-x64
-          # macOS configuration (Apple Silicon)
+          # macOS configuration (Apple Silicon only)
           - os: macos-latest
             platform: macos
             architecture: arm64
@@ -334,10 +328,6 @@ jobs:
         echo "1. Download `cipher-windows-x64.exe`" >> release-notes.md
         echo "2. Double-click to run" >> release-notes.md
         echo "" >> release-notes.md
-        echo "### macOS (Intel)" >> release-notes.md
-        echo "1. Download `cipher-macos-x64`" >> release-notes.md
-        echo "2. Right-click the file and select 'Open', or run `./cipher-macos-x64` from terminal" >> release-notes.md
-        echo "" >> release-notes.md
         echo "### macOS (Apple Silicon)" >> release-notes.md
         echo "1. Download `cipher-macos-arm64`" >> release-notes.md
         echo "2. Right-click the file and select 'Open', or run `./cipher-macos-arm64` from terminal" >> release-notes.md
@@ -438,7 +428,7 @@ jobs:
         echo "==========================================="
 
     - name: Create Release
-      uses: softprops/action-gh-release@v1
+      uses: softprops/action-gh-release@v2
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       with:
