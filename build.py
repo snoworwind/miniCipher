@@ -73,7 +73,7 @@ def install_dependencies(use_system_python=False):
         return False
 
 def update_spec_file():
-    """Update or create spec file - enhanced version"""
+    """Update or create spec file - enhanced version that always generates fresh spec file"""
     print("=" * 60)
     print("Updating spec file...")
     print("=" * 60)
@@ -83,8 +83,15 @@ def update_spec_file():
     
     # Create enhanced spec file content with proper path escaping
     project_dir_str = str(project_dir)
-    # Escape backslashes in Windows paths
-    project_dir_escaped = project_dir_str.replace('\\', '\\\\')
+    
+    # Escape backslashes in Windows paths for Python string literals
+    # PyInstaller spec files are Python code, so we need proper escaping
+    if platform.system() == "Windows":
+        # Windows paths: need double backslashes for Python string literals
+        project_dir_escaped = project_dir_str.replace('\\', '\\\\')
+    else:
+        # Linux/Mac paths: no escaping needed
+        project_dir_escaped = project_dir_str
     
     spec_content = f'''# -*- mode: python ; coding: utf-8 -*-
 # Cipher - PyInstaller spec file
@@ -169,76 +176,36 @@ coll = COLLECT(
 )'''
     
     try:
-        # If spec file doesn't exist, create it directly
-        if not spec_file.exists():
-            print(f"Creating new spec file: {spec_file}")
-            with open(spec_file, 'w', encoding='utf-8') as f:
-                f.write(spec_content)
-            print(f"✓ Spec file created: {spec_file}")
-            return True
-        
-        # Read existing spec file
-        print(f"Reading existing spec file: {spec_file}")
-        with open(spec_file, 'r', encoding='utf-8') as f:
-            existing_content = f.read()
-        
-        # Check if existing spec file is complete
-        spec_is_valid = True
-        missing_imports = []
-        
-        # Check necessary hiddenimports
-        required_imports = [
-            'cryptography.hazmat.backends.openssl.backend',
-            'cryptography.hazmat.primitives.ciphers.algorithms',
-            'tkinter'
-        ]
-        
-        for imp in required_imports:
-            if imp not in existing_content:
-                spec_is_valid = False
-                missing_imports.append(imp)
-        
-        if spec_is_valid:
-            print(f"✓ Spec file is up to date and complete")
-            
-            # Ensure noarchive setting is correct
-            if "noarchive=True" in existing_content:
-                updated_content = existing_content.replace("noarchive=True", "noarchive=False")
-                with open(spec_file, 'w', encoding='utf-8') as f:
-                    f.write(updated_content)
-                print("Fixed noarchive setting: True → False")
-            elif "noarchive = True" in existing_content:
-                updated_content = existing_content.replace("noarchive = True", "noarchive = False")
-                with open(spec_file, 'w', encoding='utf-8') as f:
-                    f.write(updated_content)
-                print("Fixed noarchive setting: True → False")
-            
-            return True
-        else:
-            print(f"Warning: spec file missing necessary imports: {missing_imports}")
-            print("Replacing with enhanced spec file...")
-            
-            # Backup original file
+        # Always backup existing spec file if it exists
+        if spec_file.exists():
+            print(f"Backing up existing spec file: {spec_file}")
             backup_file = spec_file.with_suffix('.spec.backup')
             with open(backup_file, 'w', encoding='utf-8') as f:
-                f.write(existing_content)
-            print(f"Original spec file backed up to: {backup_file}")
-            
-            # Write enhanced spec file
-            with open(spec_file, 'w', encoding='utf-8') as f:
-                f.write(spec_content)
-            
-            print(f"✓ Spec file updated to enhanced version")
-            return True
+                with open(spec_file, 'r', encoding='utf-8') as src:
+                    f.write(src.read())
+            print(f"✓ Original spec file backed up to: {backup_file}")
+        
+        # Always write new spec file with current path
+        print(f"Generating new spec file with current path: {project_dir}")
+        with open(spec_file, 'w', encoding='utf-8') as f:
+            f.write(spec_content)
+        
+        print(f"✓ Spec file generated: {spec_file}")
+        print(f"  Path used: {project_dir_escaped}")
+        print(f"  Platform: {platform.system()}")
+        
+        return True
             
     except Exception as e:
-        print(f"Error: Exception occurred while processing spec file: {e}")
-        print("Attempting to create new spec file...")
+        print(f"Error: Exception occurred while generating spec file: {e}")
+        print("Attempting to create new spec file with simplified path...")
         
         try:
+            # Fallback: use simple path without escaping
+            fallback_content = spec_content.replace(f"pathex=['{project_dir_escaped}']", "pathex=[]")
             with open(spec_file, 'w', encoding='utf-8') as f:
-                f.write(spec_content)
-            print(f"✓ Spec file created (error recovery): {spec_file}")
+                f.write(fallback_content)
+            print(f"✓ Spec file created (fallback, no pathex): {spec_file}")
             return True
         except Exception as e2:
             print(f"✗ Unable to create spec file: {e2}")
