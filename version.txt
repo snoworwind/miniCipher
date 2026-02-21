@@ -1,0 +1,11 @@
+# MiniCipher 版本信息
+# ====================
+
+version: v1.0.3+dev.2026-02-21.ba3eef7
+build_date: 2026-02-21T03:37:11.593300Z
+build_type: dev
+commit_hash: ba3eef7
+commit_count: 3
+branch: main
+platform: windows
+architecture: x64

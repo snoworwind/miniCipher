@@ -1,0 +1,303 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'  # 匹配v开头的tag，如v1.0.0, v2.1.0-beta.1
+  workflow_dispatch:  # 允许手动触发
+
+jobs:
+  build-all-platforms:
+    strategy:
+      matrix:
+        include:
+          - os: windows-latest
+            platform: windows
+            architecture: x64
+            output_name: Cipher-windows-x64.exe
+            asset_name: cipher-windows-x64.exe
+          - os: macos-latest
+            platform: macos
+            architecture: universal
+            output_name: Cipher-macos-universal
+            asset_name: cipher-macos-universal
+          - os: ubuntu-latest
+            platform: linux
+            architecture: x64
+            output_name: Cipher-linux-x64
+            asset_name: cipher-linux-x64
+
+    runs-on: ${{ matrix.os }}
+    name: Build for ${{ matrix.platform }}
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0  # 获取所有历史记录以便git describe
+
+    - name: Get version from tag
+      id: get_version
+      run: |
+        # 从git tag获取版本
+        if [ -n "${{ github.ref_name }}" ]; then
+          VERSION="${{ github.ref_name }}"
+          echo "VERSION=$VERSION" >> $GITHUB_OUTPUT
+          echo "TAG_NAME=$VERSION" >> $GITHUB_OUTPUT
+          
+          # 清理版本号用于文件名
+          CLEAN_VERSION=$(echo "$VERSION" | sed 's/^v//' | sed 's/[^a-zA-Z0-9._-]/_/g')
+          echo "CLEAN_VERSION=$CLEAN_VERSION" >> $GITHUB_OUTPUT
+          
+          echo "Building version: $VERSION"
+          echo "Clean version for files: $CLEAN_VERSION"
+        else
+          echo "ERROR: No tag found!"
+          exit 1
+        fi
+
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.11'
+
+    - name: Generate build info
+      run: |
+        # 生成详细的构建信息
+        echo "=== BUILD INFORMATION ==="
+        echo "Tag: ${{ steps.get_version.outputs.VERSION }}"
+        echo "Platform: ${{ matrix.platform }}-${{ matrix.architecture }}"
+        echo "Build date: $(date)"
+        echo "Commit: $(git rev-parse HEAD)"
+        echo "========================="
+        
+        # 创建构建信息文件
+        cat > build-info-${{ matrix.platform }}.txt << EOF
+        MiniCipher Build Information
+        ============================
+        Version: ${{ steps.get_version.outputs.VERSION }}
+        Platform: ${{ matrix.platform }}-${{ matrix.architecture }}
+        Build date: $(date -u +'%Y-%m-%d %H:%M:%S UTC')
+        Commit: $(git rev-parse HEAD)
+        Commit short: $(git rev-parse --short HEAD)
+        Python version: $(python --version)
+        Build runner: ${{ matrix.os }}
+        
+        SHA256 Checksums:
+        -----------------
+        EOF
+
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        python build.py --install-deps --system-python
+
+    - name: Build executable
+      run: |
+        echo "Building ${{ matrix.platform }} version..."
+        python build.py --clean --build --system-python
+        
+        # 验证构建
+        if [ "${{ matrix.platform }}" = "windows" ]; then
+          if [ ! -f "dist/Cipher.exe" ]; then
+            echo "ERROR: Cipher.exe not found!"
+            ls -la dist/ || true
+            exit 1
+          fi
+          echo "Build successful: dist/Cipher.exe"
+        else
+          if [ ! -f "dist/Cipher" ]; then
+            echo "ERROR: Cipher binary not found!"
+            ls -la dist/ || true
+            exit 1
+          fi
+          echo "Build successful: dist/Cipher"
+        fi
+
+    - name: Test build
+      run: |
+        echo "Testing build..."
+        python build.py --test --system-python
+
+    - name: Prepare release assets
+      run: |
+        echo "Preparing release assets..."
+        
+        # 重命名文件
+        if [ "${{ matrix.platform }}" = "windows" ]; then
+          cp dist/Cipher.exe dist/${{ matrix.output_name }}
+          RELEASE_FILE="dist/${{ matrix.output_name }}"
+        else
+          cp dist/Cipher dist/${{ matrix.output_name }}
+          chmod +x dist/${{ matrix.output_name }}
+          RELEASE_FILE="dist/${{ matrix.output_name }}"
+        fi
+        
+        # 计算SHA256
+        if command -v sha256sum > /dev/null 2>&1; then
+          SHA256=$(sha256sum "$RELEASE_FILE" | cut -d' ' -f1)
+        elif command -v shasum > /dev/null 2>&1; then
+          SHA256=$(shasum -a 256 "$RELEASE_FILE" | cut -d' ' -f1)
+        else
+          SHA256="unknown"
+        fi
+        
+        echo "SHA256: $SHA256"
+        echo "File: $RELEASE_FILE"
+        
+        # 更新构建信息文件
+        echo "${{ matrix.output_name }}: $SHA256" >> build-info-${{ matrix.platform }}.txt
+        
+        # 创建最终的版本信息文件
+        cat > release-${{ matrix.platform }}.txt << EOF
+        MiniCipher Release
+        ==================
+        Version: ${{ steps.get_version.outputs.VERSION }}
+        File: ${{ matrix.output_name }}
+        Platform: ${{ matrix.platform }}-${{ matrix.architecture }}
+        SHA256: $SHA256
+        Build date: $(date -u +'%Y-%m-%d %H:%M:%S UTC')
+        
+        Installation:
+        -------------
+        Windows: Double-click ${{ matrix.output_name }} or run from command line
+        macOS/Linux: Run ./${{ matrix.output_name }} from terminal
+        
+        Source code: https://github.com/${{ github.repository }}
+        EOF
+        
+        # 显示最终文件列表
+        echo "Release assets ready:"
+        ls -la dist/
+        echo ""
+        echo "Info files:"
+        ls -la *.txt
+
+    - name: Upload artifacts for release
+      uses: actions/upload-artifact@v4
+      with:
+        name: release-${{ matrix.platform }}-${{ steps.get_version.outputs.CLEAN_VERSION }}
+        path: |
+          dist/${{ matrix.output_name }}
+          build-info-${{ matrix.platform }}.txt
+          release-${{ matrix.platform }}.txt
+        retention-days: 7
+
+  create-release:
+    runs-on: ubuntu-latest
+    needs: build-all-platforms
+    name: Create GitHub Release
+    if: success()
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Download all artifacts
+      uses: actions/download-artifact@v4
+      with:
+        path: release-artifacts
+
+    - name: Generate release notes
+      run: |
+        echo "Generating release notes..."
+        
+        # 获取最近提交信息
+        LATEST_TAG="${{ github.ref_name }}"
+        PREVIOUS_TAG=$(git describe --tags --abbrev=0 "$LATEST_TAG^" 2>/dev/null || echo "")
+        
+        echo "# MiniCipher $LATEST_TAG" > release-notes.md
+        echo "" >> release-notes.md
+        echo "## Downloads" >> release-notes.md
+        echo "" >> release-notes.md
+        echo "Platform | File | SHA256" >> release-notes.md
+        echo "-------- | ---- | ------" >> release-notes.md
+        
+        # 从各个构建信息文件中提取信息
+        for info_file in release-artifacts/**/build-info-*.txt; do
+          if [ -f "$info_file" ]; then
+            PLATFORM=$(basename "$info_file" | sed 's/build-info-//' | sed 's/.txt//')
+            SHA256_LINE=$(grep "SHA256 Checksums" -A 10 "$info_file" | tail -1)
+            FILENAME=$(echo "$SHA256_LINE" | cut -d: -f1 | xargs)
+            HASH=$(echo "$SHA256_LINE" | cut -d: -f2 | xargs)
+            
+            if [ -n "$FILENAME" ] && [ -n "$HASH" ]; then
+              echo "$PLATFORM | [$FILENAME](https://github.com/${{ github.repository }}/releases/download/$LATEST_TAG/$FILENAME) | \`$HASH\`" >> release-notes.md
+            fi
+          fi
+        done
+        
+        echo "" >> release-notes.md
+        echo "## Installation" >> release-notes.md
+        echo "" >> release-notes.md
+        echo "### Windows" >> release-notes.md
+        echo "1. Download `cipher-windows-x64.exe`" >> release-notes.md
+        echo "2. Double-click to run" >> release-notes.md
+        echo "" >> release-notes.md
+        echo "### macOS" >> release-notes.md
+        echo "1. Download `cipher-macos-universal`" >> release-notes.md
+        echo "2. Open Terminal" >> release-notes.md
+        echo "3. Run: `chmod +x cipher-macos-universal`" >> release-notes.md
+        echo "4. Run: `./cipher-macos-universal`" >> release-notes.md
+        echo "" >> release-notes.md
+        echo "### Linux" >> release-notes.md
+        echo "1. Download `cipher-linux-x64`" >> release-notes.md
+        echo "2. Run: `chmod +x cipher-linux-x64`" >> release-notes.md
+        echo "3. Run: `./cipher-linux-x64`" >> release-notes.md
+        echo "" >> release-notes.md
+        
+        if [ -n "$PREVIOUS_TAG" ]; then
+          echo "## Changes since $PREVIOUS_TAG" >> release-notes.md
+          echo "" >> release-notes.md
+          echo '```' >> release-notes.md
+          git log --oneline --no-decorate "$PREVIOUS_TAG..$LATEST_TAG" >> release-notes.md
+          echo '```' >> release-notes.md
+        else
+          echo "## Initial Release" >> release-notes.md
+        fi
+        
+        echo "" >> release-notes.md
+        echo "## Build Information" >> release-notes.md
+        echo "" >> release-notes.md
+        echo "- Build date: $(date -u +'%Y-%m-%d %H:%M:%S UTC')" >> release-notes.md
+        echo "- Commit: $(git rev-parse --short HEAD)" >> release-notes.md
+        echo "- Python: 3.11" >> release-notes.md
+        
+        echo "Release notes generated:"
+        cat release-notes.md
+
+    - name: Create Release
+      uses: softprops/action-gh-release@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        tag_name: ${{ github.ref_name }}
+        release_name: MiniCipher ${{ github.ref_name }}
+        body_path: release-notes.md
+        draft: false
+        prerelease: ${{ contains(github.ref_name, '-') }}  # 如果tag包含'-'，标记为预发布
+        files: |
+          release-artifacts/**/*.exe
+          release-artifacts/**/Cipher-*
+          release-artifacts/**/*.txt
+
+  notify:
+    runs-on: ubuntu-latest
+    needs: create-release
+    name: Release Notification
+    if: always()
+
+    steps:
+    - name: Release status
+      run: |
+        echo "============================="
+        echo "   RELEASE COMPLETED"
+        echo "============================="
+        echo ""
+        echo "Version: ${{ github.ref_name }}"
+        echo "Status: ${{ job.status }}"
+        echo ""
+        echo "Release URL:"
+        echo "https://github.com/${{ github.repository }}/releases/tag/${{ github.ref_name }}"
+        echo ""
+        echo "============================="
