@@ -36,6 +36,7 @@ jobs:
 
     - name: Get version from tag
       id: get_version
+      shell: bash
       run: |
         # Get version from git tag
         if [ -n "${{ github.ref_name }}" ]; then
@@ -60,6 +61,7 @@ jobs:
         python-version: '3.11'
 
     - name: Generate build info
+      shell: bash
       run: |
         # Generate detailed build information
         echo "=== BUILD INFORMATION ==="
@@ -91,6 +93,7 @@ jobs:
         python build.py --install-deps --system-python
 
     - name: Build executable
+      shell: bash
       run: |
         echo "Building ${{ matrix.platform }} version..."
         python build.py --clean --build --system-python
@@ -118,6 +121,7 @@ jobs:
         python build.py --test --system-python
 
     - name: Prepare release assets
+      shell: bash
       run: |
         echo "Preparing release assets..."
         
@@ -200,6 +204,7 @@ jobs:
         path: release-artifacts
 
     - name: Generate release notes
+      shell: bash
       run: |
         echo "Generating release notes..."
         

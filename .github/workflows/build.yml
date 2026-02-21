@@ -48,6 +48,7 @@ jobs:
 
     - name: Generate version information
       id: version
+      shell: bash
       run: |
         # Generate version information
         echo "VERSION_DATE=$(date +'%Y-%m-%d')" >> $GITHUB_OUTPUT
@@ -72,6 +73,7 @@ jobs:
         python build.py --install-deps --system-python
 
     - name: Build executable
+      shell: bash
       run: |
         echo "Building on ${{ matrix.platform }} ${{ matrix.architecture }}..."
         python build.py --clean --build --system-python
@@ -103,6 +105,7 @@ jobs:
         python build.py --test --system-python
 
     - name: Rename and prepare artifact
+      shell: bash
       run: |
         echo "Preparing artifact: ${{ matrix.output_name }}"
         
@@ -172,6 +175,7 @@ jobs:
         path: artifacts
 
     - name: Display build summary
+      shell: bash
       run: |
         echo "============================"
         echo "     BUILD SUMMARY"
