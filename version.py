@@ -164,7 +164,8 @@ def inject_version_into_executable():
         git_info = get_git_info()
         version = generate_version_number(git_info)
         
-        content = f'''"""
+        content = f'''
+"""
 Auto-generated version information - for injection into executable
 """
 
@@ -236,7 +237,15 @@ def main():
         inject_version_into_executable()
     
     # Output version number (for script use)
-    print(f"::set-output name=version::{version}")
+    # GitHub Actions deprecated ::set-output in October 2022
+    # Use environment file method if GITHUB_OUTPUT is available
+    github_output = os.environ.get('GITHUB_OUTPUT')
+    if github_output:
+        with open(github_output, 'a', encoding='utf-8') as f:
+            f.write(f'version={version}\n')
+    else:
+        # Keep backward compatibility for local testing
+        print(f"::set-output name=version::{version}")
     
     return 0
 
