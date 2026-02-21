@@ -207,9 +207,12 @@ exe = EXE(
 )'''
     
     # Add COLLECT only for non-macOS platforms
-    if macos_template:
+    if macos_template or system == "Linux":
         spec_content = base_spec_content
-        print("Using single-file bundle template for macOS")
+        if macos_template:
+            print("Using single-file bundle template for macOS")
+        else:
+            print("Using single-file bundle template for Linux")
     else:
         spec_content = base_spec_content + '''
 
