@@ -16,11 +16,6 @@ jobs:
             architecture: x64
             output_name: Cipher-windows-x64.exe
             asset_name: cipher-windows-x64.exe
-          - os: macos-latest
-            platform: macos
-            architecture: universal
-            output_name: Cipher-macos-universal
-            asset_name: cipher-macos-universal
           - os: ubuntu-latest
             platform: linux
             architecture: x64
@@ -161,7 +156,7 @@ jobs:
         Installation:
         -------------
         Windows: Double-click ${{ matrix.output_name }} or run from command line
-        macOS/Linux: Run ./${{ matrix.output_name }} from terminal
+        Linux: Run ./${{ matrix.output_name }} from terminal
         
         Source code: https://github.com/${{ github.repository }}
         EOF
@@ -233,12 +228,6 @@ jobs:
         echo "### Windows" >> release-notes.md
         echo "1. Download `cipher-windows-x64.exe`" >> release-notes.md
         echo "2. Double-click to run" >> release-notes.md
-        echo "" >> release-notes.md
-        echo "### macOS" >> release-notes.md
-        echo "1. Download `cipher-macos-universal`" >> release-notes.md
-        echo "2. Open Terminal" >> release-notes.md
-        echo "3. Run: `chmod +x cipher-macos-universal`" >> release-notes.md
-        echo "4. Run: `./cipher-macos-universal`" >> release-notes.md
         echo "" >> release-notes.md
         echo "### Linux" >> release-notes.md
         echo "1. Download `cipher-linux-x64`" >> release-notes.md

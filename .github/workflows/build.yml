@@ -11,13 +11,11 @@ jobs:
   build:
     strategy:
       matrix:
-        os: [windows-latest, macos-latest, ubuntu-latest]
+        os: [windows-latest, ubuntu-latest]
         python-version: ['3.9', '3.10', '3.11']
         exclude:
           - os: windows-latest
             python-version: '3.9'  # Test only latest Python version on Windows
-          - os: macos-latest
-            python-version: '3.9'  # Test only latest Python version on macOS
           - os: ubuntu-latest
             python-version: '3.9'  # Test only latest Python version on Linux
         include:
@@ -27,11 +25,6 @@ jobs:
             platform: windows
             architecture: x64
             output_name: Cipher-windows-x64.exe
-          - os: macos-latest
-            python-version: '3.11'
-            platform: macos
-            architecture: universal
-            output_name: Cipher-macos-universal
           - os: ubuntu-latest
             python-version: '3.11'
             platform: linux
@@ -113,11 +106,6 @@ jobs:
         if [ "${{ matrix.platform }}" = "windows" ]; then
           # Windows: rename exe file
           cp dist/Cipher.exe dist/${{ matrix.output_name }}
-          echo "Artifact prepared: ${{ matrix.output_name }}"
-        elif [ "${{ matrix.platform }}" = "macos" ]; then
-          # macOS: rename and ensure executable permissions
-          cp dist/Cipher dist/${{ matrix.output_name }}
-          chmod +x dist/${{ matrix.output_name }}
           echo "Artifact prepared: ${{ matrix.output_name }}"
         else
           # Linux: rename and ensure executable permissions
