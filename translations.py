@@ -131,6 +131,30 @@ class TranslationKeys(str, Enum):
     SETTINGS_CLEAR = "settings_clear"
     SETTINGS_HISTORY_CLEARED = "settings_history_cleared"
     SETTINGS_RESET_TO_DEFAULTS = "settings_reset_to_defaults"
+    
+    # 配置验证相关
+    VALIDATION_REQUIRED = "validation_required"
+    VALIDATION_INVALID_STRING = "validation_invalid_string"
+    VALIDATION_INVALID_INTEGER = "validation_invalid_integer"
+    VALIDATION_INVALID_FLOAT = "validation_invalid_float"
+    VALIDATION_INVALID_BOOLEAN = "validation_invalid_boolean"
+    VALIDATION_INVALID_ENUM = "validation_invalid_enum"
+    VALIDATION_INVALID_PATH = "validation_invalid_path"
+    VALIDATION_INVALID_EMAIL = "validation_invalid_email"
+    VALIDATION_INVALID_URL = "validation_invalid_url"
+    VALIDATION_INVALID_REGEX = "validation_invalid_regex"
+    VALIDATION_STRING_MIN_LENGTH = "validation_string_min_length"
+    VALIDATION_STRING_MAX_LENGTH = "validation_string_max_length"
+    VALIDATION_INTEGER_MIN = "validation_integer_min"
+    VALIDATION_INTEGER_MAX = "validation_integer_max"
+    VALIDATION_INTEGER_RANGE = "validation_integer_range"
+    VALIDATION_FLOAT_MIN = "validation_float_min"
+    VALIDATION_FLOAT_MAX = "validation_float_max"
+    VALIDATION_FLOAT_RANGE = "validation_float_range"
+    VALIDATION_PATH_NOT_EXIST = "validation_path_not_exist"
+    VALIDATION_PATH_NOT_DIR = "validation_path_not_dir"
+    VALIDATION_PATH_NOT_FILE = "validation_path_not_file"
+    VALIDATION_CONFIG_KEY = "validation_config_key"
 
 
 class Translator:
@@ -272,6 +296,30 @@ class Translator:
             TranslationKeys.SETTINGS_CLEAR: "清空",
             TranslationKeys.SETTINGS_HISTORY_CLEARED: "历史记录已清空",
             TranslationKeys.SETTINGS_RESET_TO_DEFAULTS: "设置已重置为默认值",
+            
+            # 配置验证相关翻译
+            TranslationKeys.VALIDATION_REQUIRED: "配置项是必需的",
+            TranslationKeys.VALIDATION_INVALID_STRING: "字符串验证失败",
+            TranslationKeys.VALIDATION_INVALID_INTEGER: "无效的整数值",
+            TranslationKeys.VALIDATION_INVALID_FLOAT: "无效的浮点数值",
+            TranslationKeys.VALIDATION_INVALID_BOOLEAN: "无效的布尔值",
+            TranslationKeys.VALIDATION_INVALID_ENUM: "值必须在允许的列表中: {allowed_values}",
+            TranslationKeys.VALIDATION_INVALID_PATH: "无效的路径格式",
+            TranslationKeys.VALIDATION_INVALID_EMAIL: "无效的电子邮件地址格式",
+            TranslationKeys.VALIDATION_INVALID_URL: "无效的URL格式",
+            TranslationKeys.VALIDATION_INVALID_REGEX: "值不符合正则表达式模式",
+            TranslationKeys.VALIDATION_STRING_MIN_LENGTH: "字符串长度不能小于 {min_len}",
+            TranslationKeys.VALIDATION_STRING_MAX_LENGTH: "字符串长度不能大于 {max_len}",
+            TranslationKeys.VALIDATION_INTEGER_MIN: "整数值必须大于等于 {min_val}",
+            TranslationKeys.VALIDATION_INTEGER_MAX: "整数值必须小于等于 {max_val}",
+            TranslationKeys.VALIDATION_INTEGER_RANGE: "整数值必须在 {min_val} 和 {max_val} 之间",
+            TranslationKeys.VALIDATION_FLOAT_MIN: "浮点数值必须大于等于 {min_val}",
+            TranslationKeys.VALIDATION_FLOAT_MAX: "浮点数值必须小于等于 {max_val}",
+            TranslationKeys.VALIDATION_FLOAT_RANGE: "浮点数值必须在 {min_val} 和 {max_val} 之间",
+            TranslationKeys.VALIDATION_PATH_NOT_EXIST: "路径必须存在",
+            TranslationKeys.VALIDATION_PATH_NOT_DIR: "路径必须是目录",
+            TranslationKeys.VALIDATION_PATH_NOT_FILE: "路径必须是文件",
+            TranslationKeys.VALIDATION_CONFIG_KEY: "配置项 '{config_key}' 验证失败: {message} (值: {repr_value})",
         }
     
     def _get_english_translations(self) -> Dict[str, str]:
@@ -398,6 +446,30 @@ class Translator:
             TranslationKeys.SETTINGS_CLEAR: "Clear",
             TranslationKeys.SETTINGS_HISTORY_CLEARED: "History cleared",
             TranslationKeys.SETTINGS_RESET_TO_DEFAULTS: "Settings reset to defaults",
+            
+            # Configuration validation related translations
+            TranslationKeys.VALIDATION_REQUIRED: "Configuration item is required",
+            TranslationKeys.VALIDATION_INVALID_STRING: "String validation failed",
+            TranslationKeys.VALIDATION_INVALID_INTEGER: "Invalid integer value",
+            TranslationKeys.VALIDATION_INVALID_FLOAT: "Invalid float value",
+            TranslationKeys.VALIDATION_INVALID_BOOLEAN: "Invalid boolean value",
+            TranslationKeys.VALIDATION_INVALID_ENUM: "Value must be in allowed list: {allowed_values}",
+            TranslationKeys.VALIDATION_INVALID_PATH: "Invalid path format",
+            TranslationKeys.VALIDATION_INVALID_EMAIL: "Invalid email address format",
+            TranslationKeys.VALIDATION_INVALID_URL: "Invalid URL format",
+            TranslationKeys.VALIDATION_INVALID_REGEX: "Value does not match regex pattern",
+            TranslationKeys.VALIDATION_STRING_MIN_LENGTH: "String length cannot be less than {min_len}",
+            TranslationKeys.VALIDATION_STRING_MAX_LENGTH: "String length cannot be greater than {max_len}",
+            TranslationKeys.VALIDATION_INTEGER_MIN: "Integer value must be greater than or equal to {min_val}",
+            TranslationKeys.VALIDATION_INTEGER_MAX: "Integer value must be less than or equal to {max_val}",
+            TranslationKeys.VALIDATION_INTEGER_RANGE: "Integer value must be between {min_val} and {max_val}",
+            TranslationKeys.VALIDATION_FLOAT_MIN: "Float value must be greater than or equal to {min_val}",
+            TranslationKeys.VALIDATION_FLOAT_MAX: "Float value must be less than or equal to {max_val}",
+            TranslationKeys.VALIDATION_FLOAT_RANGE: "Float value must be between {min_val} and {max_val}",
+            TranslationKeys.VALIDATION_PATH_NOT_EXIST: "Path must exist",
+            TranslationKeys.VALIDATION_PATH_NOT_DIR: "Path must be a directory",
+            TranslationKeys.VALIDATION_PATH_NOT_FILE: "Path must be a file",
+            TranslationKeys.VALIDATION_CONFIG_KEY: "Configuration item '{config_key}' validation failed: {message} (value: {repr_value})",
         }
     
     def translate(self, key: str, **kwargs) -> str:

@@ -734,7 +734,7 @@ class TestComprehensiveCipher(unittest.TestCase):
             self.assertIn("encryption.default_algorithm", implemented_keys)
             
             deprecated_keys = config_manager.get_deprecated_keys()
-            self.assertIn("encryption.auto_generate_iv", deprecated_keys)
+            self.assertEqual(len(deprecated_keys), 0)  # 已弃用配置项已完全删除
             
             logger.info("  配置管理器基本功能测试通过 ✓")
             

@@ -9,6 +9,7 @@ import tkinter as tk
 from tkinter import ttk, filedialog
 import logging
 from config_manager import get_config_manager, AlgorithmType, KeyType, ThemeType, Language, ConfigStatus
+from config_validator import ValidationError, get_validation_manager
 from translations import TranslationKeys, get_translator, _
 from theme_manager import get_theme_manager, apply_theme_to_toplevel, CustomMessageBox
 
@@ -254,8 +255,8 @@ class SettingsDialog:
         )
         self.require_strong_password_check.grid(row=1, column=0, columnspan=2, sticky="w", padx=5, pady=5)
         
-        # OTP设置（开发中功能）
-        otp_frame = ttk.LabelFrame(scrollable_frame, text=_("OTP设置") + " (开发中)", padding=10)
+        # OTP设置
+        otp_frame = ttk.LabelFrame(scrollable_frame, text=_("OTP设置"), padding=10)
         otp_frame.pack(fill="x", padx=5, pady=5)
         
         ttk.Label(otp_frame, text=_("OTP密钥文件格式：")).grid(row=0, column=0, sticky="w", padx=5, pady=5)
@@ -265,40 +266,21 @@ class SettingsDialog:
             text=_("十六进制 (.txt)"),
             variable=self.otp_key_format_var,
             value="hex",
-            command=self._on_setting_changed,
-            state="disabled"  # 暂时禁用，功能开发中
+            command=self._on_setting_changed
         ).grid(row=0, column=1, sticky="w", padx=5, pady=2)
         ttk.Radiobutton(
             otp_frame,
             text=_("二进制 (.bin)"),
             variable=self.otp_key_format_var,
             value="binary",
-            command=self._on_setting_changed,
-            state="disabled"  # 暂时禁用，功能开发中
+            command=self._on_setting_changed
         ).grid(row=1, column=1, sticky="w", padx=5, pady=2)
         
-        # 添加开发中提示
+        # 功能说明
         ttk.Label(otp_frame, 
-                 text=_("此功能正在开发中，当前固定使用十六进制格式"),
+                 text=_("选择密钥文件保存格式，十六进制便于查看，二进制更节省空间"),
                  font=("Segoe UI", 9, "italic"),
                  foreground="gray").grid(row=2, column=0, columnspan=2, sticky="w", padx=5, pady=5)
-        
-        # 已弃用配置的提示
-        deprecated_frame = ttk.LabelFrame(scrollable_frame, text=_("已弃用功能"), padding=10)
-        deprecated_frame.pack(fill="x", padx=5, pady=5)
-        
-        ttk.Label(deprecated_frame,
-                 text=_("以下配置已从当前版本中移除："),
-                 font=("Segoe UI", 9, "italic"),
-                 foreground="orange").pack(anchor="w", padx=5, pady=2)
-        
-        ttk.Label(deprecated_frame,
-                 text="• " + _("自动生成IV（AES算法总是自动生成IV）"),
-                 foreground="gray").pack(anchor="w", padx=15, pady=1)
-        
-        ttk.Label(deprecated_frame,
-                 text="• " + _("加密前压缩文件（功能未实现）"),
-                 foreground="gray").pack(anchor="w", padx=15, pady=1)
     
     def _create_paths_tab(self):
         """创建设置选项卡"""
@@ -435,22 +417,6 @@ class SettingsDialog:
         buffer_size_spinbox.bind("<KeyRelease>", self._on_setting_changed)
         buffer_size_spinbox.bind("<ButtonRelease>", self._on_setting_changed)
         
-        # 已弃用配置的提示
-        deprecated_frame = ttk.LabelFrame(scrollable_frame, text=_("已弃用功能"), padding=10)
-        deprecated_frame.pack(fill="x", padx=5, pady=5)
-        
-        ttk.Label(deprecated_frame,
-                 text=_("以下配置已从当前版本中移除："),
-                 font=("Segoe UI", 9, "italic"),
-                 foreground="orange").pack(anchor="w", padx=5, pady=2)
-        
-        ttk.Label(deprecated_frame,
-                 text="• " + _("自动检查更新（功能未实现）"),
-                 foreground="gray").pack(anchor="w", padx=15, pady=1)
-        
-        ttk.Label(deprecated_frame,
-                 text="• " + _("并行处理（功能未实现）"),
-                 foreground="gray").pack(anchor="w", padx=15, pady=1)
         
         # 功能说明
         info_frame = ttk.LabelFrame(scrollable_frame, text=_("功能说明"), padding=10)
@@ -599,6 +565,9 @@ class SettingsDialog:
     def _on_apply(self):
         """应用设置"""
         try:
+            # 首先验证所有设置值
+            self._validate_settings()
+            
             # 保存语言设置
             language_text = self.language_var.get()
             if language_text == "简体中文":
@@ -649,6 +618,15 @@ class SettingsDialog:
             # 显示成功消息
             message_box = CustomMessageBox(self.dialog)
             message_box.show_success(_("成功"), _("设置已成功应用"))
+            
+        except ValidationError as e:
+            # 验证错误
+            logging.error(f"设置验证失败: {e}")
+            
+            # 显示验证错误消息
+            error_message = _("设置验证失败: {error}", error=str(e))
+            message_box = CustomMessageBox(self.dialog)
+            message_box.show_error(_("验证错误"), error_message)
             
         except Exception as e:
             # 记录错误日志
@@ -715,6 +693,74 @@ class SettingsDialog:
         y = self.parent.winfo_y() + (self.parent.winfo_height() - height) // 2
         
         self.dialog.geometry(f"{width}x{height}+{x}+{y}")
+    
+    def _validate_settings(self):
+        """验证所有设置值"""
+        # 获取验证管理器
+        validation_manager = get_validation_manager()
+        
+        # 验证密码最小长度
+        password_min_length = self.password_min_length_var.get()
+        is_valid, error_msg = validation_manager.validate_key("basic.encryption.password_min_length", password_min_length)
+        if not is_valid:
+            raise ValidationError("basic.encryption.password_min_length", password_min_length, error_msg)
+        
+        # 验证缓冲区大小
+        buffer_size = self.buffer_size_var.get()
+        is_valid, error_msg = validation_manager.validate_key("advanced.buffer_size", buffer_size)
+        if not is_valid:
+            raise ValidationError("advanced.buffer_size", buffer_size, error_msg)
+        
+        # 验证语言
+        language_text = self.language_var.get()
+        language_value = Language.ZH_CN.value if language_text == "简体中文" else Language.EN_US.value
+        is_valid, error_msg = validation_manager.validate_key("basic.ui.language", language_value)
+        if not is_valid:
+            raise ValidationError("basic.ui.language", language_value, error_msg)
+        
+        # 验证主题
+        theme_text = self.theme_var.get()
+        theme_value = ThemeType.DARK.value if theme_text == _(TranslationKeys.DARK_THEME) else ThemeType.LIGHT.value
+        is_valid, error_msg = validation_manager.validate_key("basic.ui.theme", theme_value)
+        if not is_valid:
+            raise ValidationError("basic.ui.theme", theme_value, error_msg)
+        
+        # 验证默认算法
+        algorithm_value = self.default_algorithm_var.get()
+        is_valid, error_msg = validation_manager.validate_key("basic.encryption.default_algorithm", algorithm_value)
+        if not is_valid:
+            raise ValidationError("basic.encryption.default_algorithm", algorithm_value, error_msg)
+        
+        # 验证默认密钥类型
+        key_type_value = self.default_key_type_var.get()
+        is_valid, error_msg = validation_manager.validate_key("basic.encryption.default_key_type", key_type_value)
+        if not is_valid:
+            raise ValidationError("basic.encryption.default_key_type", key_type_value, error_msg)
+        
+        # 验证OTP密钥格式
+        otp_format_value = self.otp_key_format_var.get()
+        is_valid, error_msg = validation_manager.validate_key("basic.encryption.otp_key_format", otp_format_value)
+        if not is_valid:
+            raise ValidationError("basic.encryption.otp_key_format", otp_format_value, error_msg)
+        
+        # 验证日志级别
+        log_level_value = self.log_level_var.get()
+        is_valid, error_msg = validation_manager.validate_key("advanced.log_level", log_level_value)
+        if not is_valid:
+            raise ValidationError("advanced.log_level", log_level_value, error_msg)
+        
+        # 路径验证（如果非空）
+        input_dir = self.default_input_dir_var.get()
+        if input_dir:
+            is_valid, error_msg = validation_manager.validate_key("basic.paths.default_input_dir", input_dir)
+            if not is_valid:
+                raise ValidationError("basic.paths.default_input_dir", input_dir, error_msg)
+        
+        output_dir = self.default_output_dir_var.get()
+        if output_dir:
+            is_valid, error_msg = validation_manager.validate_key("basic.paths.default_output_dir", output_dir)
+            if not is_valid:
+                raise ValidationError("basic.paths.default_output_dir", output_dir, error_msg)
     
     def run(self):
         """运行对话框（模态）"""
