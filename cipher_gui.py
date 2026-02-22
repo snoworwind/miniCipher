@@ -7,10 +7,11 @@
 
 import os
 import tkinter as tk
-from tkinter import filedialog, messagebox, ttk
+from tkinter import filedialog, ttk
 from config_manager import get_config_manager
 from translations import TranslationKeys, get_translator, _
-from theme_manager import get_theme_manager, apply_theme_to_window
+from theme_manager import get_theme_manager, apply_theme_to_window, apply_theme_to_toplevel, CustomMessageBox
+from custom_menu_bar import CustomMenuBarBuilder
 
 class CipherGUI:
     """加密工具GUI主类 - 支持多语言和配置"""
@@ -20,6 +21,9 @@ class CipherGUI:
         self.config_manager = get_config_manager()
         self.translator = get_translator()
         self.theme_manager = get_theme_manager()
+        
+        # 自定义消息框
+        self.message_box = CustomMessageBox()
         
         # 设置默认值
         default_algorithm = self.config_manager.get_default_algorithm()
@@ -48,37 +52,24 @@ class CipherGUI:
         
         # 初始UI状态更新
         self.update_ui_state()
+        
+        # 设置消息框的父窗口
+        self.message_box.parent = self.root
     
     def _create_menu_bar(self):
-        """创建菜单栏"""
-        menubar = tk.Menu(self.root)
-        self.root.config(menu=menubar)
+        """创建自定义菜单栏"""
+        # 使用自定义菜单栏替换原生菜单
+        self.menu_bar = CustomMenuBarBuilder.create_for_cipher_gui(self.root, self)
+        self.menu_bar.pack(fill="x", side="top")
         
-        # 文件菜单
-        file_menu = tk.Menu(menubar, tearoff=0)
-        menubar.add_cascade(label=_(TranslationKeys.FILE_MENU), menu=file_menu)
-        file_menu.add_command(label=_(TranslationKeys.SETTINGS_MENU), command=self._open_settings)
-        file_menu.add_separator()
-        file_menu.add_command(label=_(TranslationKeys.EXIT), command=self.root.quit)
+        # 应用主题到自定义菜单栏
+        self.theme_manager.apply_to_widget(self.menu_bar)
         
-        # 语言菜单
-        language_menu = tk.Menu(menubar, tearoff=0)
-        menubar.add_cascade(label=_(TranslationKeys.LANGUAGE_MENU), menu=language_menu)
-        language_menu.add_command(label="简体中文", command=lambda: self._change_language("zh_CN"))
-        language_menu.add_command(label="English", command=lambda: self._change_language("en_US"))
-        
-        # 主题菜单
-        theme_menu = tk.Menu(menubar, tearoff=0)
-        menubar.add_cascade(label=_(TranslationKeys.THEME_MENU), menu=theme_menu)
-        theme_menu.add_command(label=_(TranslationKeys.LIGHT_THEME), 
-                              command=lambda: self._change_theme("light"))
-        theme_menu.add_command(label=_(TranslationKeys.DARK_THEME), 
-                              command=lambda: self._change_theme("dark"))
-        
-        # 帮助菜单
-        help_menu = tk.Menu(menubar, tearoff=0)
-        menubar.add_cascade(label=_(TranslationKeys.HELP_MENU), menu=help_menu)
-        help_menu.add_command(label=_(TranslationKeys.ABOUT), command=self._show_about)
+        # 移除原生菜单配置（如果存在）
+        try:
+            self.root.config(menu=None)
+        except:
+            pass
     
     def _init_ui_variables(self, default_algorithm, default_key_type):
         """初始化所有UI组件变量，确保安全引用"""
@@ -397,13 +388,13 @@ class CipherGUI:
     
     def _show_error_message(self, message):
         """显示错误消息"""
-        messagebox.showerror(_(TranslationKeys.ERROR), message)
+        self.message_box.show_error(_(TranslationKeys.ERROR), message)
         if self.status_bar:
             self.status_bar.config(text=f"{_(TranslationKeys.ERROR)}: {message[:50]}...")
     
     def _show_success_message(self, message):
         """显示成功消息"""
-        messagebox.showinfo(_(TranslationKeys.OK), message)
+        self.message_box.show_success(_(TranslationKeys.OK), message)
         if self.status_bar:
             self.status_bar.config(text=_(TranslationKeys.ENCRYPTION_COMPLETED))
     
@@ -745,20 +736,49 @@ class CipherGUI:
         settings_window.title(_("设置"))
         settings_window.geometry("400x300")
         
+        # 应用主题到Toplevel窗口
+        apply_theme_to_toplevel(settings_window)
+        
+        # 创建主框架
+        main_frame = ttk.Frame(settings_window, padding=20)
+        main_frame.pack(fill="both", expand=True)
+        
         # 这里可以添加各种设置选项
-        tk.Label(settings_window, text=_("设置功能正在开发中...")).pack(pady=20)
+        ttk.Label(main_frame, text=_("设置功能正在开发中..."), 
+                 font=("Segoe UI", 12)).pack(pady=20)
         
         # 关闭按钮
-        tk.Button(settings_window, text=_("关闭"), command=settings_window.destroy).pack(pady=10)
+        ttk.Button(main_frame, text=_("关闭"), 
+                  command=settings_window.destroy,
+                  style="Primary.TButton").pack(pady=10)
     
     def _change_theme(self, theme):
-        """更改主题"""
+        """更改主题 - 改进版，确保自定义菜单栏颜色正确应用"""
         try:
             self.theme_manager.set_theme(theme)
-            # 重新应用主题
+            # 应用主题到窗口
             apply_theme_to_window(self.root)
-            # 重新加载UI以完全应用主题
-            self._reload_ui()
+            
+            # 强制重新应用主题到所有现有组件
+            self.theme_manager.apply_to_all_widgets(self.root)
+            
+            # 特别处理自定义菜单栏：更新菜单颜色
+            if hasattr(self, 'menu_bar') and self.menu_bar:
+                try:
+                    # 调用自定义菜单栏的颜色更新方法
+                    self.menu_bar.update_colors()
+                    
+                    # 同时应用主题管理器到菜单栏组件
+                    self.theme_manager.apply_to_widget(self.menu_bar)
+                except Exception as e:
+                    print(f"更新菜单栏颜色时出错: {e}")
+            
+            # 更新UI状态
+            self.update_ui_state()
+            
+            # 记录主题变更
+            print(f"主题已切换到: {theme}")
+            
         except Exception as e:
             self._show_error_message(_("更改主题失败: {error}", error=str(e)))
     
@@ -818,7 +838,7 @@ class CipherGUI:
         
 版权所有 © 2026 miniCipher项目"""
         
-        messagebox.showinfo(_("关于"), about_text)
+        self.message_box.show_info(_("关于"), about_text)
     
     def run(self):
         """运行GUI"""
