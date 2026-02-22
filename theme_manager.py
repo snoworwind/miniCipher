@@ -185,121 +185,145 @@ class ThemeManager:
     
     def create_style(self, style: ttk.Style) -> None:
         """创建ttk样式"""
+        # 安全检查：确保样式关联的窗口存在
+        try:
+            # 检查样式是否有有效的master窗口
+            if not hasattr(style, 'master') or not style.master:
+                return
+                
+            # 检查master窗口是否存在
+            if hasattr(style.master, 'winfo_exists') and not style.master.winfo_exists():
+                return
+        except (tk.TclError, AttributeError):
+            # 如果检查过程中发生错误，说明窗口无效，直接返回
+            return
+        
         colors = self.colors
         
         # 使用clam主题以获得更好的颜色控制
         # clam主题在所有平台上都可用，且支持完整的自定义颜色
-        style.theme_use('clam')
+        try:
+            style.theme_use('clam')
+        except tk.TclError as e:
+            # 如果主题设置失败（可能窗口已销毁），记录日志并返回
+            import logging
+            logging.debug(f"设置主题失败（可能窗口已销毁）: {e}")
+            return
         
-        # 配置标签样式
-        style.configure(
-            "TLabel",
-            background=colors["label_bg"],
-            foreground=colors["label_fg"],
-            font=("Segoe UI", 10)
-        )
-        
-        # 配置按钮样式
-        style.configure(
-            "TButton",
-            background=colors["button_bg"],
-            foreground=colors["button_fg"],
-            borderwidth=1,
-            relief="raised",
-            padding=(12, 6),
-            font=("Segoe UI", 10, "bold")
-        )
-        style.map(
-            "TButton",
-            background=[("active", colors["active"]), ("!disabled", colors["button_bg"])],
-            foreground=[("disabled", colors["disabled"]), ("!disabled", colors["button_fg"])],
-            relief=[("pressed", "sunken"), ("!pressed", "raised")]
-        )
-        
-        # 配置主按钮样式（用于重要操作）
-        style.configure(
-            "Primary.TButton",
-            background=colors["primary"],
-            foreground=colors["button_fg"],
-            borderwidth=1,
-            relief="raised",
-            padding=(12, 6),
-            font=("Segoe UI", 10, "bold")
-        )
-        style.map(
-            "Primary.TButton",
-            background=[("active", colors["active"]), ("!disabled", colors["primary"])],
-            foreground=[("disabled", colors["disabled"]), ("!disabled", colors["button_fg"])]
-        )
-        
-        # 配置成功按钮样式
-        style.configure(
-            "Success.TButton",
-            background=colors["success"],
-            foreground=colors["button_fg"],
-            borderwidth=1,
-            relief="raised",
-            padding=(12, 6),
-            font=("Segoe UI", 10, "bold")
-        )
-        
-        # 配置输入框样式
-        style.configure(
-            "TEntry",
-            fieldbackground=colors["entry_bg"],
-            foreground=colors["entry_fg"],
-            bordercolor=colors["border"],
-            lightcolor=colors["border"],
-            darkcolor=colors["border"],
-            insertcolor=colors["entry_fg"],
-            padding=5
-        )
-        
-        # 配置下拉框样式
-        style.configure(
-            "TCombobox",
-            fieldbackground=colors["combobox_bg"],
-            foreground=colors["combobox_fg"],
-            background=colors["combobox_bg"],
-            bordercolor=colors["border"],
-            arrowcolor=colors["combobox_fg"],
-            padding=5
-        )
-        
-        # 配置框架样式
-        style.configure(
-            "TFrame",
-            background=colors["frame_bg"]
-        )
-        
-        # 配置LabelFrame样式
-        style.configure(
-            "TLabelframe",
-            background=colors["frame_bg"],
-            foreground=colors["label_fg"],
-            bordercolor=colors["border"]
-        )
-        style.configure(
-            "TLabelframe.Label",
-            background=colors["frame_bg"],
-            foreground=colors["label_fg"]
-        )
-        
-        # 配置滚动条样式
-        style.configure(
-            "Vertical.TScrollbar",
-            background=colors["secondary"],
-            troughcolor=colors["window_bg"],
-            bordercolor=colors["border"],
-            arrowcolor=colors["text_primary"]
-        )
-        style.configure(
-            "Horizontal.TScrollbar",
-            background=colors["secondary"],
-            troughcolor=colors["window_bg"],
-            bordercolor=colors["border"],
-            arrowcolor=colors["text_primary"]
-        )
+        try:
+            # 配置标签样式
+            style.configure(
+                "TLabel",
+                background=colors["label_bg"],
+                foreground=colors["label_fg"],
+                font=("Segoe UI", 10)
+            )
+            
+            # 配置按钮样式
+            style.configure(
+                "TButton",
+                background=colors["button_bg"],
+                foreground=colors["button_fg"],
+                borderwidth=1,
+                relief="raised",
+                padding=(12, 6),
+                font=("Segoe UI", 10, "bold")
+            )
+            style.map(
+                "TButton",
+                background=[("active", colors["active"]), ("!disabled", colors["button_bg"])],
+                foreground=[("disabled", colors["disabled"]), ("!disabled", colors["button_fg"])],
+                relief=[("pressed", "sunken"), ("!pressed", "raised")]
+            )
+            
+            # 配置主按钮样式（用于重要操作）
+            style.configure(
+                "Primary.TButton",
+                background=colors["primary"],
+                foreground=colors["button_fg"],
+                borderwidth=1,
+                relief="raised",
+                padding=(12, 6),
+                font=("Segoe UI", 10, "bold")
+            )
+            style.map(
+                "Primary.TButton",
+                background=[("active", colors["active"]), ("!disabled", colors["primary"])],
+                foreground=[("disabled", colors["disabled"]), ("!disabled", colors["button_fg"])]
+            )
+            
+            # 配置成功按钮样式
+            style.configure(
+                "Success.TButton",
+                background=colors["success"],
+                foreground=colors["button_fg"],
+                borderwidth=1,
+                relief="raised",
+                padding=(12, 6),
+                font=("Segoe UI", 10, "bold")
+            )
+            
+            # 配置输入框样式
+            style.configure(
+                "TEntry",
+                fieldbackground=colors["entry_bg"],
+                foreground=colors["entry_fg"],
+                bordercolor=colors["border"],
+                lightcolor=colors["border"],
+                darkcolor=colors["border"],
+                insertcolor=colors["entry_fg"],
+                padding=5
+            )
+            
+            # 配置下拉框样式
+            style.configure(
+                "TCombobox",
+                fieldbackground=colors["combobox_bg"],
+                foreground=colors["combobox_fg"],
+                background=colors["combobox_bg"],
+                bordercolor=colors["border"],
+                arrowcolor=colors["combobox_fg"],
+                padding=5
+            )
+            
+            # 配置框架样式
+            style.configure(
+                "TFrame",
+                background=colors["frame_bg"]
+            )
+            
+            # 配置LabelFrame样式
+            style.configure(
+                "TLabelframe",
+                background=colors["frame_bg"],
+                foreground=colors["label_fg"],
+                bordercolor=colors["border"]
+            )
+            style.configure(
+                "TLabelframe.Label",
+                background=colors["frame_bg"],
+                foreground=colors["label_fg"]
+            )
+            
+            # 配置滚动条样式
+            style.configure(
+                "Vertical.TScrollbar",
+                background=colors["secondary"],
+                troughcolor=colors["window_bg"],
+                bordercolor=colors["border"],
+                arrowcolor=colors["text_primary"]
+            )
+            style.configure(
+                "Horizontal.TScrollbar",
+                background=colors["secondary"],
+                troughcolor=colors["window_bg"],
+                bordercolor=colors["border"],
+                arrowcolor=colors["text_primary"]
+            )
+        except tk.TclError as e:
+            # 如果样式配置失败（可能窗口已销毁），记录日志并继续
+            import logging
+            logging.debug(f"样式配置失败（可能窗口已销毁）: {e}")
     
     def apply_to_widget(self, widget: tk.Widget) -> None:
         """将主题应用到单个widget"""
@@ -425,9 +449,19 @@ class ThemeManager:
     
     def apply_to_all_widgets(self, parent: tk.Widget) -> None:
         """将主题递归应用到所有子widget"""
+        # 安全检查：确保父部件存在
+        if not hasattr(parent, 'winfo_exists') or not parent.winfo_exists():
+            return
+            
         self.apply_to_widget(parent)
         
-        for child in parent.winfo_children():
+        # 安全地获取子部件
+        try:
+            children = parent.winfo_children()
+        except tk.TclError:
+            return  # 如果窗口已销毁，忽略错误
+            
+        for child in children:
             if isinstance(child, tk.Widget):
                 self.apply_to_widget(child)
                 # 递归处理子widget
@@ -438,7 +472,7 @@ class ThemeManager:
             try:
                 # 获取窗口的菜单栏
                 menu = parent["menu"]
-                if menu:
+                if menu and hasattr(menu, 'winfo_exists') and menu.winfo_exists():
                     self.apply_to_widget(menu)
                     # Windows系统需要额外的颜色刷新
                     import sys
@@ -526,11 +560,33 @@ class CustomMessageBox:
         self.theme_manager = get_theme_manager()
         self.colors = self.theme_manager.get_colors()
     
+    def _get_safe_parent(self):
+        """安全地获取父窗口"""
+        # 如果父窗口不存在或已销毁，返回None
+        if self.parent is None:
+            return None
+        
+        # 检查父窗口是否存在且有效
+        try:
+            if hasattr(self.parent, 'winfo_exists') and self.parent.winfo_exists():
+                return self.parent
+        except tk.TclError:
+            # 如果检查父窗口时发生Tcl错误，说明父窗口无效
+            pass
+            
+        return None
+    
     def _create_dialog(self, title: str, message: str, icon_type: str = "info") -> tk.Toplevel:
         """创建对话框窗口"""
-        dialog = tk.Toplevel(self.parent)
+        # 安全地获取父窗口
+        safe_parent = self._get_safe_parent()
+        
+        # 创建对话框，如果父窗口无效则使用None
+        dialog = tk.Toplevel(safe_parent)
         dialog.title(title)
-        dialog.transient(self.parent)
+        
+        if safe_parent:
+            dialog.transient(safe_parent)
         dialog.grab_set()
         
         # 阻止用户关闭对话框
@@ -642,9 +698,24 @@ class CustomMessageBox:
         width = dialog.winfo_width()
         height = dialog.winfo_height()
         
-        if self.parent:
-            x = self.parent.winfo_x() + (self.parent.winfo_width() - width) // 2
-            y = self.parent.winfo_y() + (self.parent.winfo_height() - height) // 2
+        # 安全地获取父窗口
+        safe_parent = self._get_safe_parent()
+        
+        if safe_parent:
+            try:
+                # 检查父窗口是否仍然有效
+                if hasattr(safe_parent, 'winfo_exists') and safe_parent.winfo_exists():
+                    x = safe_parent.winfo_x() + (safe_parent.winfo_width() - width) // 2
+                    y = safe_parent.winfo_y() + (safe_parent.winfo_height() - height) // 2
+                else:
+                    # 父窗口已销毁，使用屏幕居中
+                    raise tk.TclError("Parent window destroyed")
+            except tk.TclError:
+                # 如果获取父窗口位置失败，使用屏幕居中
+                screen_width = dialog.winfo_screenwidth()
+                screen_height = dialog.winfo_screenheight()
+                x = (screen_width - width) // 2
+                y = (screen_height - height) // 2
         else:
             # 如果没有父窗口，居中于屏幕
             screen_width = dialog.winfo_screenwidth()

@@ -1362,14 +1362,13 @@ class CipherGUI:
             self._show_error_message(_("打开设置时出错: {error}", error=str(e)))
     
     def _change_theme(self, theme):
-        """更改主题 - 改进版，确保自定义菜单栏颜色正确应用"""
+        """更改主题 - 安全版本，避免影响其他窗口（如设置对话框）"""
         try:
+            # 设置主题管理器
             self.theme_manager.set_theme(theme)
-            # 应用主题到窗口
-            apply_theme_to_window(self.root)
             
-            # 强制重新应用主题到所有现有组件
-            self.theme_manager.apply_to_all_widgets(self.root)
+            # 应用主题到主窗口（不递归到其他窗口）
+            apply_theme_to_window(self.root)
             
             # 特别处理自定义菜单栏：更新菜单颜色
             if hasattr(self, 'menu_bar') and self.menu_bar:
@@ -1377,19 +1376,24 @@ class CipherGUI:
                     # 调用自定义菜单栏的颜色更新方法
                     self.menu_bar.update_colors()
                     
-                    # 同时应用主题管理器到菜单栏组件
+                    # 同时应用主题管理器到菜单栏组件（安全地）
                     self.theme_manager.apply_to_widget(self.menu_bar)
                 except Exception as e:
                     logging.error(f"更新菜单栏颜色时出错: {e}")
             
-            # 更新UI状态
+            # 更新UI状态（只影响主窗口的部件）
             self.update_ui_state()
             
             # 记录主题变更
             logging.info(f"主题已切换到: {theme}")
             
         except Exception as e:
-            self._show_error_message(_("更改主题失败: {error}", error=str(e)))
+            # 安全地显示错误消息，避免进一步异常
+            try:
+                error_msg = f"更改主题失败: {str(e)}"
+                self._show_error_message(_("更改主题失败: {error}", error=str(e)))
+            except Exception as inner_e:
+                logging.error(f"显示主题更改错误消息时出错: {inner_e}")
     
     def _change_language(self, language_code):
         """更改界面语言"""
@@ -1401,25 +1405,48 @@ class CipherGUI:
             self._show_error_message(_("更改语言失败: {error}", error=str(e)))
     
     def _reload_ui(self):
-        """重新加载UI以应用新的语言设置"""
-        # 销毁当前UI
-        for widget in self.root.winfo_children():
-            widget.destroy()
-        
-        # 重新创建菜单
-        self._create_menu_bar()
-        
-        # 重新创建UI
-        self._init_ui_variables(
-            self.config_manager.get_default_algorithm(),
-            self.config_manager.get_default_key_type()
-        )
-        self.setup_complete_ui()
-        self._apply_configuration()
-        self.update_ui_state()
-        
-        # 更新窗口标题
-        self.root.title(_(TranslationKeys.APP_TITLE))
+        """重新加载UI以应用新的语言设置 - 安全版本，不会销毁Toplevel窗口（如设置对话框）"""
+        try:
+            # 记录当前打开的Toplevel窗口
+            toplevel_windows = []
+            for widget in self.root.winfo_children():
+                if isinstance(widget, tk.Toplevel):
+                    toplevel_windows.append(widget)
+                    logging.debug(f"检测到Toplevel窗口: {widget}")
+            
+            # 只销毁非Toplevel的子部件
+            for widget in self.root.winfo_children():
+                if not isinstance(widget, tk.Toplevel):
+                    try:
+                        widget.destroy()
+                    except tk.TclError as e:
+                        logging.debug(f"销毁部件时出错（可能已销毁）: {e}")
+            
+            # 重新创建菜单
+            self._create_menu_bar()
+            
+            # 重新创建UI
+            self._init_ui_variables(
+                self.config_manager.get_default_algorithm(),
+                self.config_manager.get_default_key_type()
+            )
+            self.setup_complete_ui()
+            self._apply_configuration()
+            self.update_ui_state()
+            
+            # 更新窗口标题
+            self.root.title(_(TranslationKeys.APP_TITLE))
+            
+            # 记录重新加载完成
+            logging.info(f"UI重新加载完成，保留了 {len(toplevel_windows)} 个Toplevel窗口")
+            
+        except Exception as e:
+            logging.error(f"重新加载UI时出错: {e}")
+            # 尝试恢复，即使出错也继续运行
+            try:
+                self._show_error_message(_("重新加载UI时出错: {error}", error=str(e)))
+            except:
+                pass
     
     def _show_about(self):
         """显示关于对话框"""
@@ -1454,6 +1481,48 @@ class CipherGUI:
 版权所有 © 2026 miniCipher项目"""
         
         self.message_box.show_info(title, about_text)
+    
+    def restart_ui(self):
+        """重启UI界面，应用新的语言和主题设置
+        
+        此方法由设置对话框调用，用于在更改语言或主题后重启界面
+        """
+        try:
+            # 记录重启开始
+            logging.info("开始重启UI界面...")
+            
+            # 获取当前配置
+            current_language = self.config_manager.get_language()
+            current_theme = self.config_manager.get_theme()
+            
+            # 记录当前设置
+            logging.info(f"重启UI设置 - 语言: {current_language}, 主题: {current_theme}")
+            
+            # 首先更改语言设置，这会更新翻译器并重新加载界面
+            # _change_language方法会调用_translator.set_language()然后_reload_ui()
+            self._change_language(current_language)
+            
+            # 然后应用主题更改（_change_language中的_reload_ui可能不会重新应用主题到所有组件）
+            self._change_theme(current_theme)
+            
+            # 记录重启完成
+            logging.info("UI界面重启完成")
+            
+            # 显示成功消息（可选，但可能干扰用户体验）
+            # self._show_success_message("界面重启完成")
+            
+        except Exception as e:
+            # 记录错误，但不显示错误消息避免干扰用户
+            logging.error(f"重启UI界面时出错: {e}")
+            import traceback
+            traceback.print_exc()
+            # 尝试恢复：至少重新加载界面
+            try:
+                # 尝试使用传统方式恢复：重新加载界面和应用主题
+                self._reload_ui()
+                self._change_theme(current_theme)
+            except Exception as inner_e:
+                logging.error(f"恢复界面时也出错: {inner_e}")
     
     def run(self):
         """运行GUI"""

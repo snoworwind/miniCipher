@@ -155,6 +155,44 @@ class TranslationKeys(str, Enum):
     VALIDATION_PATH_NOT_DIR = "validation_path_not_dir"
     VALIDATION_PATH_NOT_FILE = "validation_path_not_file"
     VALIDATION_CONFIG_KEY = "validation_config_key"
+    
+    # 设置对话框新增翻译键
+    UI_LANGUAGE = "ui_language"
+    UI_THEME = "ui_theme"
+    DEFAULT_ALGORITHM_LABEL = "default_algorithm_label"
+    DEFAULT_KEY_TYPE_LABEL = "default_key_type_label"
+    OTP_FORMAT_INFO = "otp_format_info"
+    DEFAULT_INPUT_DIRECTORY = "default_input_directory"
+    DEFAULT_OUTPUT_DIRECTORY = "default_output_directory"
+    FEATURE_DESCRIPTION = "feature_description"
+    ADVANCED_SETTINGS_INFO = "advanced_settings_info"
+    TAB_GENERAL = "tab_general"
+    TAB_ENCRYPTION = "tab_encryption"
+    TAB_PATHS = "tab_paths"
+    TAB_ADVANCED = "tab_advanced"
+    LOG_LEVEL_LABEL = "log_level_label"
+    BUFFER_SIZE_LABEL = "buffer_size_label"
+    CHINESE_LANGUAGE = "chinese_language"
+    ENGLISH_LANGUAGE = "english_language"
+    SETTINGS_SUCCESS_TITLE = "settings_success_title"
+    SETTINGS_SUCCESS_MESSAGE = "settings_success_message"
+    VALIDATION_ERROR_TITLE = "validation_error_title"
+    VALIDATION_ERROR_MESSAGE = "validation_error_message"
+    ERROR_TITLE = "error_title"
+    ERROR_MESSAGE_TEMPLATE = "error_message_template"
+    RESET_TITLE = "reset_title"
+    RESET_MESSAGE = "reset_message"
+    CLEAR_TITLE = "clear_title"
+    CLEAR_MESSAGE = "clear_message"
+
+    # 重启提示翻译键
+    RESTART_REQUIRED_TITLE = "restart_required_title"
+    RESTART_REQUIRED_INTRO = "restart_required_intro"
+    RESTART_LANGUAGE_CHANGED = "restart_language_changed"
+    RESTART_THEME_CHANGED = "restart_theme_changed"
+    RESTART_REQUIRED_INSTRUCTIONS = "restart_required_instructions"
+    RESTART_NOW_BUTTON = "restart_now_button"
+    RESTART_LATER_BUTTON = "restart_later_button"
 
 
 class Translator:
@@ -320,6 +358,44 @@ class Translator:
             TranslationKeys.VALIDATION_PATH_NOT_DIR: "路径必须是目录",
             TranslationKeys.VALIDATION_PATH_NOT_FILE: "路径必须是文件",
             TranslationKeys.VALIDATION_CONFIG_KEY: "配置项 '{config_key}' 验证失败: {message} (值: {repr_value})",
+            
+            # 设置对话框新增翻译
+            TranslationKeys.UI_LANGUAGE: "界面语言：",
+            TranslationKeys.UI_THEME: "界面主题：",
+            TranslationKeys.DEFAULT_ALGORITHM_LABEL: "默认算法：",
+            TranslationKeys.DEFAULT_KEY_TYPE_LABEL: "默认密钥类型：",
+            TranslationKeys.OTP_FORMAT_INFO: "选择密钥文件保存格式，十六进制便于查看，二进制更节省空间",
+            TranslationKeys.DEFAULT_INPUT_DIRECTORY: "默认输入目录：",
+            TranslationKeys.DEFAULT_OUTPUT_DIRECTORY: "默认输出目录：",
+            TranslationKeys.FEATURE_DESCRIPTION: "功能说明",
+            TranslationKeys.ADVANCED_SETTINGS_INFO: "当前版本的高级设置仅包含已实现的功能：\n• 调试模式：控制控制台输出详细程度\n• 日志级别：控制日志信息的详细程度\n• 缓冲区大小：控制文件分块处理的大小\n\n其他高级功能将在未来版本中添加。",
+            TranslationKeys.TAB_GENERAL: "常规",
+            TranslationKeys.TAB_ENCRYPTION: "加密",
+            TranslationKeys.TAB_PATHS: "路径",
+            TranslationKeys.TAB_ADVANCED: "高级",
+            TranslationKeys.LOG_LEVEL_LABEL: "日志级别：",
+            TranslationKeys.BUFFER_SIZE_LABEL: "缓冲区大小 (MB)：",
+            TranslationKeys.CHINESE_LANGUAGE: "简体中文",
+            TranslationKeys.ENGLISH_LANGUAGE: "English",
+            TranslationKeys.SETTINGS_SUCCESS_TITLE: "成功",
+            TranslationKeys.SETTINGS_SUCCESS_MESSAGE: "设置已成功应用",
+            TranslationKeys.VALIDATION_ERROR_TITLE: "验证错误",
+            TranslationKeys.VALIDATION_ERROR_MESSAGE: "设置验证失败: {error}",
+            TranslationKeys.ERROR_TITLE: "错误",
+            TranslationKeys.ERROR_MESSAGE_TEMPLATE: "应用设置时出错: {error}",
+            TranslationKeys.RESET_TITLE: "重置",
+            TranslationKeys.RESET_MESSAGE: "设置已重置为默认值",
+            TranslationKeys.CLEAR_TITLE: "清空",
+            TranslationKeys.CLEAR_MESSAGE: "历史记录已清空",
+
+            # 重启提示翻译
+            TranslationKeys.RESTART_REQUIRED_TITLE: "需要重启界面",
+            TranslationKeys.RESTART_REQUIRED_INTRO: "您已更改了需要重启界面才能完全生效的设置：",
+            TranslationKeys.RESTART_LANGUAGE_CHANGED: "语言已更改",
+            TranslationKeys.RESTART_THEME_CHANGED: "主题已更改",
+            TranslationKeys.RESTART_REQUIRED_INSTRUCTIONS: "请重启界面以使更改生效。点击\"立即重启\"按钮关闭设置对话框并重启界面。",
+            TranslationKeys.RESTART_NOW_BUTTON: "立即重启",
+            TranslationKeys.RESTART_LATER_BUTTON: "稍后重启",
         }
     
     def _get_english_translations(self) -> Dict[str, str]:
@@ -470,6 +546,44 @@ class Translator:
             TranslationKeys.VALIDATION_PATH_NOT_DIR: "Path must be a directory",
             TranslationKeys.VALIDATION_PATH_NOT_FILE: "Path must be a file",
             TranslationKeys.VALIDATION_CONFIG_KEY: "Configuration item '{config_key}' validation failed: {message} (value: {repr_value})",
+            
+            # Settings dialog new translations
+            TranslationKeys.UI_LANGUAGE: "Interface Language:",
+            TranslationKeys.UI_THEME: "Interface Theme:",
+            TranslationKeys.DEFAULT_ALGORITHM_LABEL: "Default Algorithm:",
+            TranslationKeys.DEFAULT_KEY_TYPE_LABEL: "Default Key Type:",
+            TranslationKeys.OTP_FORMAT_INFO: "Select key file format, hexadecimal for easy viewing, binary for space efficiency",
+            TranslationKeys.DEFAULT_INPUT_DIRECTORY: "Default Input Directory:",
+            TranslationKeys.DEFAULT_OUTPUT_DIRECTORY: "Default Output Directory:",
+            TranslationKeys.FEATURE_DESCRIPTION: "Feature Description",
+            TranslationKeys.ADVANCED_SETTINGS_INFO: "Current version of advanced settings only includes implemented features:\n• Debug mode: Controls console output verbosity\n• Log level: Controls log message verbosity\n• Buffer size: Controls file chunk processing size\n\nOther advanced features will be added in future versions.",
+            TranslationKeys.TAB_GENERAL: "General",
+            TranslationKeys.TAB_ENCRYPTION: "Encryption",
+            TranslationKeys.TAB_PATHS: "Paths",
+            TranslationKeys.TAB_ADVANCED: "Advanced",
+            TranslationKeys.LOG_LEVEL_LABEL: "Log Level:",
+            TranslationKeys.BUFFER_SIZE_LABEL: "Buffer Size (MB):",
+            TranslationKeys.CHINESE_LANGUAGE: "Chinese",
+            TranslationKeys.ENGLISH_LANGUAGE: "English",
+            TranslationKeys.SETTINGS_SUCCESS_TITLE: "Success",
+            TranslationKeys.SETTINGS_SUCCESS_MESSAGE: "Settings successfully applied",
+            TranslationKeys.VALIDATION_ERROR_TITLE: "Validation Error",
+            TranslationKeys.VALIDATION_ERROR_MESSAGE: "Settings validation failed: {error}",
+            TranslationKeys.ERROR_TITLE: "Error",
+            TranslationKeys.ERROR_MESSAGE_TEMPLATE: "Error applying settings: {error}",
+            TranslationKeys.RESET_TITLE: "Reset",
+            TranslationKeys.RESET_MESSAGE: "Settings reset to defaults",
+            TranslationKeys.CLEAR_TITLE: "Clear",
+            TranslationKeys.CLEAR_MESSAGE: "History cleared",
+
+            # Restart prompt translations
+            TranslationKeys.RESTART_REQUIRED_TITLE: "Restart Required",
+            TranslationKeys.RESTART_REQUIRED_INTRO: "You have changed settings that require a restart to take full effect:",
+            TranslationKeys.RESTART_LANGUAGE_CHANGED: "Language changed",
+            TranslationKeys.RESTART_THEME_CHANGED: "Theme changed",
+            TranslationKeys.RESTART_REQUIRED_INSTRUCTIONS: "Please restart the interface for the changes to take effect. Click \"Restart Now\" to close the settings dialog and restart the interface.",
+            TranslationKeys.RESTART_NOW_BUTTON: "Restart Now",
+            TranslationKeys.RESTART_LATER_BUTTON: "Restart Later",
         }
     
     def translate(self, key: str, **kwargs) -> str:

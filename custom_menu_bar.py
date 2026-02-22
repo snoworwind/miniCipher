@@ -265,18 +265,30 @@ class CustomMenuBar(ttk.Frame):
         """关闭指定菜单"""
         menu_info = self.menu_items[menu_label]
         
-        if menu_info["frame"] and menu_info["frame"].winfo_exists():
+        # 安全检查：确保按钮存在
+        button_exists = hasattr(menu_info["button"], 'winfo_exists') and menu_info["button"].winfo_exists()
+        
+        if menu_info["frame"] and hasattr(menu_info["frame"], 'winfo_exists') and menu_info["frame"].winfo_exists():
             menu_info["frame"].destroy()
             menu_info["frame"] = None
         
         menu_info["visible"] = False
         
-        # 更新菜单按钮状态
-        menu_info["button"].state(["!active"])
+        # 安全地更新菜单按钮状态
+        if button_exists:
+            try:
+                menu_info["button"].state(["!active"])
+            except tk.TclError:
+                # 如果按钮状态设置失败，忽略错误
+                pass
         
         # 如果没有活动菜单，移除全局点击事件
         if not any(m["visible"] for m in self.menu_items.values()):
-            self.parent.unbind("<Button-1>")
+            try:
+                self.parent.unbind("<Button-1>")
+            except tk.TclError:
+                # 如果取消绑定失败，忽略错误
+                pass
             self.active_menu = None
     
     def close_all_menus(self) -> None:
