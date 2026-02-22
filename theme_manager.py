@@ -348,7 +348,18 @@ class ThemeManager:
         elif isinstance(widget, tk.Listbox):
             widget.configure(bg=colors["entry_bg"], fg=colors["entry_fg"])
         elif isinstance(widget, tk.Scrollbar):
-            widget.configure(bg=colors["secondary"], troughcolor=colors["window_bg"])
+            # tk.Scrollbar 在某些平台上可能不支持所有选项，安全地配置
+            try:
+                widget.configure(bg=colors["secondary"])
+            except tk.TclError:
+                pass
+            try:
+                widget.configure(troughcolor=colors["window_bg"])
+            except tk.TclError:
+                pass
+        elif isinstance(widget, ttk.Scrollbar):
+            # ttk.Scrollbar 通过样式系统处理，跳过直接配置
+            pass
         elif isinstance(widget, tk.Menu):
             # 应用主题到菜单组件 - 改进版，确保所有菜单项正确应用颜色
             try:

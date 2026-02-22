@@ -84,6 +84,53 @@ class TranslationKeys(str, Enum):
     LIGHT_THEME = "light_theme"
     DARK_THEME = "dark_theme"
     THEME_SETTINGS = "theme_settings"
+    
+    # 设置对话框
+    SETTINGS_GENERAL = "settings_general"
+    SETTINGS_ENCRYPTION = "settings_encryption"
+    SETTINGS_PATHS = "settings_paths"
+    SETTINGS_ADVANCED = "settings_advanced"
+    SETTINGS_LANGUAGE = "settings_language"
+    SETTINGS_THEME = "settings_theme"
+    SETTINGS_LANGUAGE_CHINESE = "settings_language_chinese"
+    SETTINGS_LANGUAGE_ENGLISH = "settings_language_english"
+    SETTINGS_ALGORITHM = "settings_algorithm"
+    SETTINGS_KEY_TYPE = "settings_key_type"
+    SETTINGS_PASSWORD = "settings_password"
+    SETTINGS_PASSWORD_MIN_LENGTH = "settings_password_min_length"
+    SETTINGS_REQUIRE_STRONG_PASSWORD = "settings_require_strong_password"
+    SETTINGS_OTP = "settings_otp"
+    SETTINGS_AES = "settings_aes"
+    SETTINGS_FILE_FORMAT = "settings_file_format"
+    SETTINGS_COMPRESSION = "settings_compression"
+    SETTINGS_DEFAULT_PATHS = "settings_default_paths"
+    SETTINGS_REMEMBER_LAST_FOLDER = "settings_remember_last_folder"
+    SETTINGS_CLEAR_HISTORY = "settings_clear_history"
+    SETTINGS_UPDATE = "settings_update"
+    SETTINGS_DEBUG = "settings_debug"
+    SETTINGS_PERFORMANCE = "settings_performance"
+    SETTINGS_THEME_PREVIEW = "settings_theme_preview"
+    SETTINGS_WINDOW = "settings_window"
+    SETTINGS_OTP_KEY_FORMAT = "settings_otp_key_format"
+    SETTINGS_OTP_HEX = "settings_otp_hex"
+    SETTINGS_OTP_BINARY = "settings_otp_binary"
+    SETTINGS_AES_AUTO_IV = "settings_aes_auto_iv"
+    SETTINGS_AUTO_UPDATE = "settings_auto_update"
+    SETTINGS_UPDATE_FREQUENCY = "settings_update_frequency"
+    SETTINGS_DEBUG_MODE = "settings_debug_mode"
+    SETTINGS_LOG_LEVEL = "settings_log_level"
+    SETTINGS_PARALLEL_PROCESSING = "settings_parallel_processing"
+    SETTINGS_BUFFER_SIZE = "settings_buffer_size"
+    SETTINGS_UPDATE_DAILY = "settings_update_daily"
+    SETTINGS_UPDATE_WEEKLY = "settings_update_weekly"
+    SETTINGS_UPDATE_MONTHLY = "settings_update_monthly"
+    SETTINGS_UPDATE_NEVER = "settings_update_never"
+    SETTINGS_SUCCESS = "settings_success"
+    SETTINGS_ERROR = "settings_error"
+    SETTINGS_RESET = "settings_reset"
+    SETTINGS_CLEAR = "settings_clear"
+    SETTINGS_HISTORY_CLEARED = "settings_history_cleared"
+    SETTINGS_RESET_TO_DEFAULTS = "settings_reset_to_defaults"
 
 
 class Translator:
@@ -178,6 +225,53 @@ class Translator:
             TranslationKeys.LIGHT_THEME: "浅色主题",
             TranslationKeys.DARK_THEME: "深色主题",
             TranslationKeys.THEME_SETTINGS: "主题设置",
+            
+            # 设置对话框
+            TranslationKeys.SETTINGS_GENERAL: "常规",
+            TranslationKeys.SETTINGS_ENCRYPTION: "加密",
+            TranslationKeys.SETTINGS_PATHS: "路径",
+            TranslationKeys.SETTINGS_ADVANCED: "高级",
+            TranslationKeys.SETTINGS_LANGUAGE: "语言设置",
+            TranslationKeys.SETTINGS_THEME: "主题设置",
+            TranslationKeys.SETTINGS_LANGUAGE_CHINESE: "简体中文",
+            TranslationKeys.SETTINGS_LANGUAGE_ENGLISH: "English",
+            TranslationKeys.SETTINGS_ALGORITHM: "算法设置",
+            TranslationKeys.SETTINGS_KEY_TYPE: "密钥类型设置",
+            TranslationKeys.SETTINGS_PASSWORD: "密码设置",
+            TranslationKeys.SETTINGS_PASSWORD_MIN_LENGTH: "密码最小长度：",
+            TranslationKeys.SETTINGS_REQUIRE_STRONG_PASSWORD: "要求强密码（大小写字母+数字）",
+            TranslationKeys.SETTINGS_OTP: "OTP设置",
+            TranslationKeys.SETTINGS_AES: "AES设置",
+            TranslationKeys.SETTINGS_FILE_FORMAT: "文件格式设置",
+            TranslationKeys.SETTINGS_COMPRESSION: "压缩设置",
+            TranslationKeys.SETTINGS_DEFAULT_PATHS: "默认路径",
+            TranslationKeys.SETTINGS_REMEMBER_LAST_FOLDER: "记住上次使用的文件夹",
+            TranslationKeys.SETTINGS_CLEAR_HISTORY: "清空历史记录",
+            TranslationKeys.SETTINGS_UPDATE: "更新设置",
+            TranslationKeys.SETTINGS_DEBUG: "调试设置",
+            TranslationKeys.SETTINGS_PERFORMANCE: "性能设置",
+            TranslationKeys.SETTINGS_THEME_PREVIEW: "主题预览：",
+            TranslationKeys.SETTINGS_WINDOW: "窗口设置",
+            TranslationKeys.SETTINGS_OTP_KEY_FORMAT: "OTP密钥文件格式：",
+            TranslationKeys.SETTINGS_OTP_HEX: "十六进制 (.txt)",
+            TranslationKeys.SETTINGS_OTP_BINARY: "二进制 (.bin)",
+            TranslationKeys.SETTINGS_AES_AUTO_IV: "自动生成IV（初始化向量）",
+            TranslationKeys.SETTINGS_AUTO_UPDATE: "自动检查更新",
+            TranslationKeys.SETTINGS_UPDATE_FREQUENCY: "检查频率：",
+            TranslationKeys.SETTINGS_DEBUG_MODE: "启用调试模式",
+            TranslationKeys.SETTINGS_LOG_LEVEL: "日志级别：",
+            TranslationKeys.SETTINGS_PARALLEL_PROCESSING: "启用多线程处理",
+            TranslationKeys.SETTINGS_BUFFER_SIZE: "缓冲区大小 (MB)：",
+            TranslationKeys.SETTINGS_UPDATE_DAILY: "每天",
+            TranslationKeys.SETTINGS_UPDATE_WEEKLY: "每周",
+            TranslationKeys.SETTINGS_UPDATE_MONTHLY: "每月",
+            TranslationKeys.SETTINGS_UPDATE_NEVER: "从不",
+            TranslationKeys.SETTINGS_SUCCESS: "成功",
+            TranslationKeys.SETTINGS_ERROR: "错误",
+            TranslationKeys.SETTINGS_RESET: "重置",
+            TranslationKeys.SETTINGS_CLEAR: "清空",
+            TranslationKeys.SETTINGS_HISTORY_CLEARED: "历史记录已清空",
+            TranslationKeys.SETTINGS_RESET_TO_DEFAULTS: "设置已重置为默认值",
         }
     
     def _get_english_translations(self) -> Dict[str, str]:
@@ -257,6 +351,53 @@ class Translator:
             TranslationKeys.LIGHT_THEME: "Light Theme",
             TranslationKeys.DARK_THEME: "Dark Theme",
             TranslationKeys.THEME_SETTINGS: "Theme Settings",
+            
+            # 设置对话框
+            TranslationKeys.SETTINGS_GENERAL: "General",
+            TranslationKeys.SETTINGS_ENCRYPTION: "Encryption",
+            TranslationKeys.SETTINGS_PATHS: "Paths",
+            TranslationKeys.SETTINGS_ADVANCED: "Advanced",
+            TranslationKeys.SETTINGS_LANGUAGE: "Language Settings",
+            TranslationKeys.SETTINGS_THEME: "Theme Settings",
+            TranslationKeys.SETTINGS_LANGUAGE_CHINESE: "Chinese",
+            TranslationKeys.SETTINGS_LANGUAGE_ENGLISH: "English",
+            TranslationKeys.SETTINGS_ALGORITHM: "Algorithm Settings",
+            TranslationKeys.SETTINGS_KEY_TYPE: "Key Type Settings",
+            TranslationKeys.SETTINGS_PASSWORD: "Password Settings",
+            TranslationKeys.SETTINGS_PASSWORD_MIN_LENGTH: "Password Minimum Length:",
+            TranslationKeys.SETTINGS_REQUIRE_STRONG_PASSWORD: "Require strong password (uppercase + lowercase + digits)",
+            TranslationKeys.SETTINGS_OTP: "OTP Settings",
+            TranslationKeys.SETTINGS_AES: "AES Settings",
+            TranslationKeys.SETTINGS_FILE_FORMAT: "File Format Settings",
+            TranslationKeys.SETTINGS_COMPRESSION: "Compression Settings",
+            TranslationKeys.SETTINGS_DEFAULT_PATHS: "Default Paths",
+            TranslationKeys.SETTINGS_REMEMBER_LAST_FOLDER: "Remember last used folder",
+            TranslationKeys.SETTINGS_CLEAR_HISTORY: "Clear History",
+            TranslationKeys.SETTINGS_UPDATE: "Update Settings",
+            TranslationKeys.SETTINGS_DEBUG: "Debug Settings",
+            TranslationKeys.SETTINGS_PERFORMANCE: "Performance Settings",
+            TranslationKeys.SETTINGS_THEME_PREVIEW: "Theme Preview:",
+            TranslationKeys.SETTINGS_WINDOW: "Window Settings",
+            TranslationKeys.SETTINGS_OTP_KEY_FORMAT: "OTP Key File Format:",
+            TranslationKeys.SETTINGS_OTP_HEX: "Hexadecimal (.txt)",
+            TranslationKeys.SETTINGS_OTP_BINARY: "Binary (.bin)",
+            TranslationKeys.SETTINGS_AES_AUTO_IV: "Auto-generate IV (Initialization Vector)",
+            TranslationKeys.SETTINGS_AUTO_UPDATE: "Auto-check for updates",
+            TranslationKeys.SETTINGS_UPDATE_FREQUENCY: "Check Frequency:",
+            TranslationKeys.SETTINGS_DEBUG_MODE: "Enable debug mode",
+            TranslationKeys.SETTINGS_LOG_LEVEL: "Log Level:",
+            TranslationKeys.SETTINGS_PARALLEL_PROCESSING: "Enable multi-threading",
+            TranslationKeys.SETTINGS_BUFFER_SIZE: "Buffer Size (MB):",
+            TranslationKeys.SETTINGS_UPDATE_DAILY: "Daily",
+            TranslationKeys.SETTINGS_UPDATE_WEEKLY: "Weekly",
+            TranslationKeys.SETTINGS_UPDATE_MONTHLY: "Monthly",
+            TranslationKeys.SETTINGS_UPDATE_NEVER: "Never",
+            TranslationKeys.SETTINGS_SUCCESS: "Success",
+            TranslationKeys.SETTINGS_ERROR: "Error",
+            TranslationKeys.SETTINGS_RESET: "Reset",
+            TranslationKeys.SETTINGS_CLEAR: "Clear",
+            TranslationKeys.SETTINGS_HISTORY_CLEARED: "History cleared",
+            TranslationKeys.SETTINGS_RESET_TO_DEFAULTS: "Settings reset to defaults",
         }
     
     def translate(self, key: str, **kwargs) -> str:
