@@ -21,6 +21,11 @@ class KeyType(str, Enum):
     RANDOM = "random"
     PASSWORD = "password"
 
+class ThemeType(str, Enum):
+    """主题类型枚举"""
+    LIGHT = "light"
+    DARK = "dark"
+
 class Language(str, Enum):
     """支持的语言枚举"""
     ZH_CN = "zh_CN"  # 简体中文
@@ -65,7 +70,7 @@ class ConfigurationManager:
             "version": config_version,
             "ui": {
                 "language": Language.ZH_CN.value,
-                "theme": "default",
+                "theme": ThemeType.LIGHT.value,
                 "window_width": 800,
                 "window_height": 600,
             },
@@ -236,6 +241,25 @@ class ConfigurationManager:
     def requires_strong_password(self) -> bool:
         """是否要求强密码"""
         return self.get("encryption.require_strong_password", True)
+    
+    def get_theme(self) -> str:
+        """获取当前主题设置"""
+        return self.get("ui.theme", ThemeType.LIGHT.value)
+    
+    def set_theme(self, theme: str) -> None:
+        """设置主题"""
+        # 验证主题是否有效
+        if theme in [theme.value for theme in ThemeType]:
+            self.set("ui.theme", theme)
+        else:
+            raise ValueError(f"不支持的主题: {theme}")
+    
+    def get_available_themes(self) -> Dict[str, str]:
+        """获取可用主题列表"""
+        return {
+            ThemeType.LIGHT.value: "浅色主题",
+            ThemeType.DARK.value: "深色主题",
+        }
 
 
 # 单例实例

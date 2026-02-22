@@ -10,6 +10,7 @@ import tkinter as tk
 from tkinter import filedialog, messagebox, ttk
 from config_manager import get_config_manager
 from translations import TranslationKeys, get_translator, _
+from theme_manager import get_theme_manager, apply_theme_to_window
 
 class CipherGUI:
     """加密工具GUI主类 - 支持多语言和配置"""
@@ -18,6 +19,7 @@ class CipherGUI:
         # 初始化配置和翻译
         self.config_manager = get_config_manager()
         self.translator = get_translator()
+        self.theme_manager = get_theme_manager()
         
         # 设置默认值
         default_algorithm = self.config_manager.get_default_algorithm()
@@ -28,6 +30,9 @@ class CipherGUI:
         
         # 设置窗口最小尺寸
         self.root.minsize(800, 600)
+        
+        # 应用主题
+        apply_theme_to_window(self.root)
         
         # 创建菜单栏
         self._create_menu_bar()
@@ -61,6 +66,14 @@ class CipherGUI:
         menubar.add_cascade(label=_(TranslationKeys.LANGUAGE_MENU), menu=language_menu)
         language_menu.add_command(label="简体中文", command=lambda: self._change_language("zh_CN"))
         language_menu.add_command(label="English", command=lambda: self._change_language("en_US"))
+        
+        # 主题菜单
+        theme_menu = tk.Menu(menubar, tearoff=0)
+        menubar.add_cascade(label=_(TranslationKeys.THEME_MENU), menu=theme_menu)
+        theme_menu.add_command(label=_(TranslationKeys.LIGHT_THEME), 
+                              command=lambda: self._change_theme("light"))
+        theme_menu.add_command(label=_(TranslationKeys.DARK_THEME), 
+                              command=lambda: self._change_theme("dark"))
         
         # 帮助菜单
         help_menu = tk.Menu(menubar, tearoff=0)
@@ -125,11 +138,11 @@ class CipherGUI:
         main_container.pack(fill="both", expand=True, padx=10, pady=10)
         
         # 算法选择部分
-        frame_algorithm = tk.LabelFrame(main_container, text=_(TranslationKeys.ALGORITHM_SETTINGS))
+        frame_algorithm = ttk.LabelFrame(main_container, text=_(TranslationKeys.ALGORITHM_SETTINGS))
         frame_algorithm.pack(fill="x", padx=5, pady=5)
         
         # 算法选择
-        tk.Label(frame_algorithm, text=_(TranslationKeys.ENCRYPTION_ALGORITHM)).grid(row=0, column=0, padx=5, pady=10, sticky="w")
+        ttk.Label(frame_algorithm, text=_(TranslationKeys.ENCRYPTION_ALGORITHM)).grid(row=0, column=0, padx=5, pady=10, sticky="w")
         self.algorithm_combo = ttk.Combobox(
             frame_algorithm, 
             textvariable=self.algorithm_var,
@@ -141,7 +154,7 @@ class CipherGUI:
         self.algorithm_combo.bind("<<ComboboxSelected>>", self.on_algorithm_changed)
         
         # 密钥类型选择
-        tk.Label(frame_algorithm, text=_(TranslationKeys.KEY_TYPE)).grid(row=0, column=2, padx=5, pady=10, sticky="w")
+        ttk.Label(frame_algorithm, text=_(TranslationKeys.KEY_TYPE)).grid(row=0, column=2, padx=5, pady=10, sticky="w")
         self.key_type_combo = ttk.Combobox(
             frame_algorithm,
             textvariable=self.key_type_var,
@@ -153,13 +166,13 @@ class CipherGUI:
         self.key_type_combo.bind("<<ComboboxSelected>>", self.on_key_type_changed)
         
         # 密码输入框（默认隐藏）
-        tk.Label(frame_algorithm, text=_(TranslationKeys.PASSWORD)).grid(row=0, column=4, padx=5, pady=10, sticky="w")
-        self.password_entry = tk.Entry(frame_algorithm, width=20, show="*")
+        ttk.Label(frame_algorithm, text=_(TranslationKeys.PASSWORD)).grid(row=0, column=4, padx=5, pady=10, sticky="w")
+        self.password_entry = ttk.Entry(frame_algorithm, width=20, show="*")
         self.password_entry.grid(row=0, column=5, padx=5, pady=10)
         
         # 算法信息标签
-        self.algorithm_info = tk.Label(frame_algorithm, text=_("Cipher文件加密工具 - 选择算法开始"), 
-                                      font=("Arial", 10), fg="blue")
+        self.algorithm_info = ttk.Label(frame_algorithm, text=_("Cipher文件加密工具 - 选择算法开始"), 
+                                      font=("Segoe UI", 10))
         self.algorithm_info.grid(row=1, column=0, columnspan=6, padx=5, pady=5)
         
         # 创建加密和解密框架的容器
@@ -167,13 +180,13 @@ class CipherGUI:
         frames_container.pack(fill="both", expand=True, pady=10)
         
         # 加密部分
-        frame_encrypt = tk.LabelFrame(frames_container, text=_(TranslationKeys.ENCRYPTION))
+        frame_encrypt = ttk.LabelFrame(frames_container, text=_(TranslationKeys.ENCRYPTION))
         frame_encrypt.pack(side="left", fill="both", expand=True, padx=5, pady=5)
         
         self._setup_encrypt_frame(frame_encrypt)
         
         # 解密部分
-        frame_decrypt = tk.LabelFrame(frames_container, text=_(TranslationKeys.DECRYPTION))
+        frame_decrypt = ttk.LabelFrame(frames_container, text=_(TranslationKeys.DECRYPTION))
         frame_decrypt.pack(side="right", fill="both", expand=True, padx=5, pady=5)
         
         self._setup_decrypt_frame(frame_decrypt)
@@ -181,6 +194,8 @@ class CipherGUI:
         # 状态栏
         self.status_bar = tk.Label(self.root, text=_(TranslationKeys.READY), bd=1, relief=tk.SUNKEN, anchor=tk.W)
         self.status_bar.pack(side=tk.BOTTOM, fill=tk.X)
+        # 应用主题到状态栏
+        self.theme_manager.apply_to_widget(self.status_bar)
         
         # 初始化事件绑定
         self.on_algorithm_changed()
@@ -188,66 +203,59 @@ class CipherGUI:
     def _setup_encrypt_frame(self, frame):
         """设置加密部分的UI"""
         # 输入文件
-        tk.Label(frame, text=_(TranslationKeys.INPUT_FILE_PATH)).grid(row=0, column=0, padx=10, pady=10, sticky="w")
-        self.entry_input_file = tk.Entry(frame, width=50)
+        ttk.Label(frame, text=_(TranslationKeys.INPUT_FILE_PATH)).grid(row=0, column=0, padx=10, pady=10, sticky="w")
+        self.entry_input_file = ttk.Entry(frame, width=50)
         self.entry_input_file.grid(row=0, column=1, padx=10, pady=10)
-        tk.Button(frame, text=_(TranslationKeys.BROWSE), command=lambda: self.browse_file(self.entry_input_file), 
-                 bg="#e0e0e0").grid(row=0, column=2, padx=10, pady=10)
+        ttk.Button(frame, text=_(TranslationKeys.BROWSE), command=lambda: self.browse_file(self.entry_input_file)).grid(row=0, column=2, padx=10, pady=10)
         
         # 输出目录
-        tk.Label(frame, text=_(TranslationKeys.OUTPUT_DIRECTORY_PATH)).grid(row=1, column=0, padx=10, pady=10, sticky="w")
-        self.entry_output_dir = tk.Entry(frame, width=50)
+        ttk.Label(frame, text=_(TranslationKeys.OUTPUT_DIRECTORY_PATH)).grid(row=1, column=0, padx=10, pady=10, sticky="w")
+        self.entry_output_dir = ttk.Entry(frame, width=50)
         self.entry_output_dir.grid(row=1, column=1, padx=10, pady=10)
-        tk.Button(frame, text=_(TranslationKeys.BROWSE), command=lambda: self.browse_directory(self.entry_output_dir),
-                 bg="#e0e0e0").grid(row=1, column=2, padx=10, pady=10)
+        ttk.Button(frame, text=_(TranslationKeys.BROWSE), command=lambda: self.browse_directory(self.entry_output_dir)).grid(row=1, column=2, padx=10, pady=10)
         
         # 加密按钮
-        tk.Button(frame, text=_(TranslationKeys.START_ENCRYPTION), command=self.encrypt, 
-                 bg="#4CAF50", fg="white", font=("Arial", 12, "bold"),
-                 padx=20, pady=10).grid(row=2, column=0, columnspan=3, pady=20)
+        ttk.Button(frame, text=_(TranslationKeys.START_ENCRYPTION), command=self.encrypt,
+                 style="Success.TButton").grid(row=2, column=0, columnspan=3, pady=20)
         
         # 添加一些提示信息
-        tk.Label(frame, text=_(TranslationKeys.TIPS), font=("Arial", 10, "bold"), fg="#666").grid(row=3, column=0, sticky="w", padx=10)
-        tk.Label(frame, text=_(TranslationKeys.TIPS_ENCRYPT), 
-                justify="left", fg="#666").grid(row=3, column=1, columnspan=2, sticky="w", padx=10)
+        ttk.Label(frame, text=_(TranslationKeys.TIPS), font=("Segoe UI", 10, "bold")).grid(row=3, column=0, sticky="w", padx=10)
+        ttk.Label(frame, text=_(TranslationKeys.TIPS_ENCRYPT), 
+                justify="left").grid(row=3, column=1, columnspan=2, sticky="w", padx=10)
     
     def _setup_decrypt_frame(self, frame):
         """设置解密部分的UI"""
         # 输入密文文件
-        tk.Label(frame, text=_(TranslationKeys.INPUT_CIPHER_PATH)).grid(row=0, column=0, padx=10, pady=10, sticky="w")
-        self.entry_input_cipher = tk.Entry(frame, width=50)
+        ttk.Label(frame, text=_(TranslationKeys.INPUT_CIPHER_PATH)).grid(row=0, column=0, padx=10, pady=10, sticky="w")
+        self.entry_input_cipher = ttk.Entry(frame, width=50)
         self.entry_input_cipher.grid(row=0, column=1, padx=10, pady=10)
-        tk.Button(frame, text=_(TranslationKeys.BROWSE), command=lambda: self.browse_file(self.entry_input_cipher),
-                 bg="#e0e0e0").grid(row=0, column=2, padx=10, pady=10)
+        ttk.Button(frame, text=_(TranslationKeys.BROWSE), command=lambda: self.browse_file(self.entry_input_cipher)).grid(row=0, column=2, padx=10, pady=10)
         
         # 密钥文件（仅OTP和随机密钥AES）
-        tk.Label(frame, text=_(TranslationKeys.KEY_FILE_PATH)).grid(row=1, column=0, padx=10, pady=10, sticky="w")
-        self.entry_key_file = tk.Entry(frame, width=50)
+        ttk.Label(frame, text=_(TranslationKeys.KEY_FILE_PATH)).grid(row=1, column=0, padx=10, pady=10, sticky="w")
+        self.entry_key_file = ttk.Entry(frame, width=50)
         self.entry_key_file.grid(row=1, column=1, padx=10, pady=10)
-        tk.Button(frame, text=_(TranslationKeys.BROWSE), command=lambda: self.browse_file(self.entry_key_file),
-                 bg="#e0e0e0").grid(row=1, column=2, padx=10, pady=10)
+        ttk.Button(frame, text=_(TranslationKeys.BROWSE), command=lambda: self.browse_file(self.entry_key_file)).grid(row=1, column=2, padx=10, pady=10)
         
         # 解密密码（密码模式AES）
-        tk.Label(frame, text=_(TranslationKeys.DECRYPTION_PASSWORD)).grid(row=2, column=0, padx=10, pady=10, sticky="w")
-        self.entry_decrypt_password = tk.Entry(frame, width=50, show="*")
+        ttk.Label(frame, text=_(TranslationKeys.DECRYPTION_PASSWORD)).grid(row=2, column=0, padx=10, pady=10, sticky="w")
+        self.entry_decrypt_password = ttk.Entry(frame, width=50, show="*")
         self.entry_decrypt_password.grid(row=2, column=1, padx=10, pady=10)
         
         # 输出目录
-        tk.Label(frame, text=_(TranslationKeys.DECRYPTION_OUTPUT_PATH)).grid(row=3, column=0, padx=10, pady=10, sticky="w")
-        self.entry_decrypt_output = tk.Entry(frame, width=50)
+        ttk.Label(frame, text=_(TranslationKeys.DECRYPTION_OUTPUT_PATH)).grid(row=3, column=0, padx=10, pady=10, sticky="w")
+        self.entry_decrypt_output = ttk.Entry(frame, width=50)
         self.entry_decrypt_output.grid(row=3, column=1, padx=10, pady=10)
-        tk.Button(frame, text=_(TranslationKeys.BROWSE), command=lambda: self.browse_directory(self.entry_decrypt_output),
-                 bg="#e0e0e0").grid(row=3, column=2, padx=10, pady=10)
+        ttk.Button(frame, text=_(TranslationKeys.BROWSE), command=lambda: self.browse_directory(self.entry_decrypt_output)).grid(row=3, column=2, padx=10, pady=10)
         
         # 解密按钮
-        tk.Button(frame, text=_(TranslationKeys.START_DECRYPTION), command=self.decrypt,
-                 bg="#2196F3", fg="white", font=("Arial", 12, "bold"),
-                 padx=20, pady=10).grid(row=4, column=0, columnspan=3, pady=20)
+        ttk.Button(frame, text=_(TranslationKeys.START_DECRYPTION), command=self.decrypt,
+                 style="Primary.TButton").grid(row=4, column=0, columnspan=3, pady=20)
         
         # 添加一些提示信息
-        tk.Label(frame, text=_(TranslationKeys.TIPS), font=("Arial", 10, "bold"), fg="#666").grid(row=5, column=0, sticky="w", padx=10)
-        tk.Label(frame, text=_(TranslationKeys.TIPS_DECRYPT), 
-                justify="left", fg="#666").grid(row=5, column=1, columnspan=2, sticky="w", padx=10)
+        ttk.Label(frame, text=_(TranslationKeys.TIPS), font=("Segoe UI", 10, "bold")).grid(row=5, column=0, sticky="w", padx=10)
+        ttk.Label(frame, text=_(TranslationKeys.TIPS_DECRYPT), 
+                justify="left").grid(row=5, column=1, columnspan=2, sticky="w", padx=10)
     
     def on_algorithm_changed(self, event=None):
         """算法选择变更处理"""
@@ -742,6 +750,17 @@ class CipherGUI:
         
         # 关闭按钮
         tk.Button(settings_window, text=_("关闭"), command=settings_window.destroy).pack(pady=10)
+    
+    def _change_theme(self, theme):
+        """更改主题"""
+        try:
+            self.theme_manager.set_theme(theme)
+            # 重新应用主题
+            apply_theme_to_window(self.root)
+            # 重新加载UI以完全应用主题
+            self._reload_ui()
+        except Exception as e:
+            self._show_error_message(_("更改主题失败: {error}", error=str(e)))
     
     def _change_language(self, language_code):
         """更改界面语言"""

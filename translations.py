@@ -77,7 +77,13 @@ class TranslationKeys(str, Enum):
     SETTINGS_MENU = "settings_menu"
     EXIT = "exit"
     LANGUAGE_MENU = "language_menu"
+    THEME_MENU = "theme_menu"
     ABOUT = "about"
+    
+    # 主题相关
+    LIGHT_THEME = "light_theme"
+    DARK_THEME = "dark_theme"
+    THEME_SETTINGS = "theme_settings"
 
 
 class Translator:
@@ -165,7 +171,13 @@ class Translator:
             TranslationKeys.SETTINGS_MENU: "设置",
             TranslationKeys.EXIT: "退出",
             TranslationKeys.LANGUAGE_MENU: "语言",
+            TranslationKeys.THEME_MENU: "主题",
             TranslationKeys.ABOUT: "关于",
+            
+            # 主题相关
+            TranslationKeys.LIGHT_THEME: "浅色主题",
+            TranslationKeys.DARK_THEME: "深色主题",
+            TranslationKeys.THEME_SETTINGS: "主题设置",
         }
     
     def _get_english_translations(self) -> Dict[str, str]:
@@ -238,7 +250,13 @@ class Translator:
             TranslationKeys.SETTINGS_MENU: "Settings",
             TranslationKeys.EXIT: "Exit",
             TranslationKeys.LANGUAGE_MENU: "Language",
+            TranslationKeys.THEME_MENU: "Theme",
             TranslationKeys.ABOUT: "About",
+            
+            # 主题相关
+            TranslationKeys.LIGHT_THEME: "Light Theme",
+            TranslationKeys.DARK_THEME: "Dark Theme",
+            TranslationKeys.THEME_SETTINGS: "Theme Settings",
         }
     
     def translate(self, key: str, **kwargs) -> str:
