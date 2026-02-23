@@ -194,6 +194,63 @@ class TranslationKeys(str, Enum):
     RESTART_NOW_BUTTON = "restart_now_button"
     RESTART_LATER_BUTTON = "restart_later_button"
 
+    # 批量操作翻译键
+    BATCH_OPERATION = "batch_operation"
+    BATCH_TAB_TITLE = "batch_tab_title"
+    BATCH_SELECT_FILES = "batch_select_files"
+    BATCH_SELECT_FOLDER = "batch_select_folder"
+    BATCH_SELECT_RECURSIVE = "batch_select_recursive"
+    BATCH_SELECTED_FILES = "batch_selected_files"
+    BATCH_SELECTED_FOLDER = "batch_selected_folder"
+    BATCH_SELECTED_RECURSIVE = "batch_selected_recursive"
+    BATCH_PROCESSING_MODE = "batch_processing_mode"
+    BATCH_PROCESSING_MODE_FILES = "batch_processing_mode_files"
+    BATCH_PROCESSING_MODE_FOLDER = "batch_processing_mode_folder"
+    BATCH_PROCESSING_MODE_RECURSIVE = "batch_processing_mode_recursive"
+    BATCH_OUTPUT_DIRECTORY = "batch_output_directory"
+    BATCH_PRESERVE_STRUCTURE = "batch_preserve_structure"
+    BATCH_ENABLE_PARALLEL = "batch_enable_parallel"
+    BATCH_MAX_THREADS = "batch_max_threads"
+    BATCH_START_ENCRYPTION = "batch_start_encryption"
+    BATCH_START_DECRYPTION = "batch_start_decryption"
+    BATCH_CANCEL_PROCESSING = "batch_cancel_processing"
+    BATCH_PROGRESS_TOTAL = "batch_progress_total"
+    BATCH_PROGRESS_CURRENT = "batch_progress_current"
+    BATCH_PROGRESS_FILE = "batch_progress_file"
+    BATCH_PROGRESS_SUCCESS = "batch_progress_success"
+    BATCH_PROGRESS_FAILED = "batch_progress_failed"
+    BATCH_PROGRESS_ELAPSED = "batch_progress_elapsed"
+    BATCH_PROGRESS_SPEED = "batch_progress_speed"
+    BATCH_STATUS_COLLECTING = "batch_status_collecting"
+    BATCH_STATUS_PROCESSING = "batch_status_processing"
+    BATCH_STATUS_COMPLETED = "batch_status_completed"
+    BATCH_STATUS_CANCELLED = "batch_status_cancelled"
+    BATCH_RESULTS_TITLE = "batch_results_title"
+    BATCH_RESULTS_SUCCESS = "batch_results_success"
+    BATCH_RESULTS_FAILED = "batch_results_failed"
+    BATCH_RESULTS_SKIPPED = "batch_results_skipped"
+    BATCH_RESULTS_SUCCESS_RATE = "batch_results_success_rate"
+    BATCH_RESULTS_TOTAL_SIZE = "batch_results_total_size"
+    BATCH_RESULTS_PROCESSED_SIZE = "batch_results_processed_size"
+    BATCH_RESULTS_ELAPSED_TIME = "batch_results_elapsed_time"
+    BATCH_RESULTS_AVG_SPEED = "batch_results_avg_speed"
+    BATCH_NO_FILES_SELECTED = "batch_no_files_selected"
+    BATCH_INVALID_OUTPUT_DIR = "batch_invalid_output_dir"
+    BATCH_OPERATION_STARTED = "batch_operation_started"
+    BATCH_OPERATION_COMPLETED = "batch_operation_completed"
+    BATCH_OPERATION_CANCELLED = "batch_operation_cancelled"
+    BATCH_OPERATION_FAILED = "batch_operation_failed"
+    BATCH_ERROR_INVALID_PATHS = "batch_error_invalid_paths"
+    BATCH_ERROR_NO_OUTPUT = "batch_error_no_output"
+    BATCH_ERROR_PROCESSING_ACTIVE = "batch_error_processing_active"
+    BATCH_TIPS_TITLE = "batch_tips_title"
+    BATCH_TIPS_ENCRYPT = "batch_tips_encrypt"
+    BATCH_TIPS_DECRYPT = "batch_tips_decrypt"
+
+    # 批量操作对话框标题
+    BATCH_SELECT_FILES_DIALOG_TITLE = "batch_select_files_dialog_title"
+    BATCH_SELECT_FOLDER_DIALOG_TITLE = "batch_select_folder_dialog_title"
+
 
 class Translator:
     """翻译管理器"""
@@ -396,6 +453,62 @@ class Translator:
             TranslationKeys.RESTART_REQUIRED_INSTRUCTIONS: "请重启界面以使更改生效。点击\"立即重启\"按钮关闭设置对话框并重启界面。",
             TranslationKeys.RESTART_NOW_BUTTON: "立即重启",
             TranslationKeys.RESTART_LATER_BUTTON: "稍后重启",
+
+            # 批量操作翻译
+            TranslationKeys.BATCH_OPERATION: "批量操作",
+            TranslationKeys.BATCH_TAB_TITLE: "批量加密/解密",
+            TranslationKeys.BATCH_SELECT_FILES: "选择文件",
+            TranslationKeys.BATCH_SELECT_FOLDER: "选择文件夹",
+            TranslationKeys.BATCH_SELECT_RECURSIVE: "递归选择文件夹",
+            TranslationKeys.BATCH_SELECTED_FILES: "已选文件：{count} 个文件",
+            TranslationKeys.BATCH_SELECTED_FOLDER: "已选文件夹：{path}",
+            TranslationKeys.BATCH_SELECTED_RECURSIVE: "已选文件夹（递归）：{path}",
+            TranslationKeys.BATCH_PROCESSING_MODE: "处理模式：",
+            TranslationKeys.BATCH_PROCESSING_MODE_FILES: "多个文件",
+            TranslationKeys.BATCH_PROCESSING_MODE_FOLDER: "文件夹内容",
+            TranslationKeys.BATCH_PROCESSING_MODE_RECURSIVE: "文件夹内容（递归）",
+            TranslationKeys.BATCH_OUTPUT_DIRECTORY: "输出目录：",
+            TranslationKeys.BATCH_PRESERVE_STRUCTURE: "保持目录结构",
+            TranslationKeys.BATCH_ENABLE_PARALLEL: "启用并行处理",
+            TranslationKeys.BATCH_MAX_THREADS: "最大线程数：",
+            TranslationKeys.BATCH_START_ENCRYPTION: "开始批量加密",
+            TranslationKeys.BATCH_START_DECRYPTION: "开始批量解密",
+            TranslationKeys.BATCH_CANCEL_PROCESSING: "取消处理",
+            TranslationKeys.BATCH_PROGRESS_TOTAL: "总文件数：{total}",
+            TranslationKeys.BATCH_PROGRESS_CURRENT: "当前进度：{current}/{total}",
+            TranslationKeys.BATCH_PROGRESS_FILE: "正在处理：{filename}",
+            TranslationKeys.BATCH_PROGRESS_SUCCESS: "成功：{success}",
+            TranslationKeys.BATCH_PROGRESS_FAILED: "失败：{failed}",
+            TranslationKeys.BATCH_PROGRESS_ELAPSED: "耗时：{elapsed}",
+            TranslationKeys.BATCH_PROGRESS_SPEED: "速度：{speed} MB/秒",
+            TranslationKeys.BATCH_STATUS_COLLECTING: "正在收集文件...",
+            TranslationKeys.BATCH_STATUS_PROCESSING: "正在处理...",
+            TranslationKeys.BATCH_STATUS_COMPLETED: "处理完成",
+            TranslationKeys.BATCH_STATUS_CANCELLED: "处理已取消",
+            TranslationKeys.BATCH_RESULTS_TITLE: "批量处理结果",
+            TranslationKeys.BATCH_RESULTS_SUCCESS: "成功：{count} 个文件",
+            TranslationKeys.BATCH_RESULTS_FAILED: "失败：{count} 个文件",
+            TranslationKeys.BATCH_RESULTS_SKIPPED: "跳过：{count} 个文件",
+            TranslationKeys.BATCH_RESULTS_SUCCESS_RATE: "成功率：{rate}%",
+            TranslationKeys.BATCH_RESULTS_TOTAL_SIZE: "总大小：{size}",
+            TranslationKeys.BATCH_RESULTS_PROCESSED_SIZE: "已处理：{size}",
+            TranslationKeys.BATCH_RESULTS_ELAPSED_TIME: "耗时：{time}",
+            TranslationKeys.BATCH_RESULTS_AVG_SPEED: "平均速度：{speed} MB/秒",
+            TranslationKeys.BATCH_NO_FILES_SELECTED: "未选择任何文件",
+            TranslationKeys.BATCH_INVALID_OUTPUT_DIR: "无效的输出目录",
+            TranslationKeys.BATCH_OPERATION_STARTED: "批量操作已开始",
+            TranslationKeys.BATCH_OPERATION_COMPLETED: "批量操作完成",
+            TranslationKeys.BATCH_OPERATION_CANCELLED: "批量操作已取消",
+            TranslationKeys.BATCH_OPERATION_FAILED: "批量操作失败：{error}",
+            TranslationKeys.BATCH_ERROR_INVALID_PATHS: "无效的路径",
+            TranslationKeys.BATCH_ERROR_NO_OUTPUT: "请指定输出目录",
+            TranslationKeys.BATCH_ERROR_PROCESSING_ACTIVE: "已有处理正在进行",
+            TranslationKeys.BATCH_TIPS_TITLE: "批量操作提示",
+            TranslationKeys.BATCH_TIPS_ENCRYPT: "• 支持批量加密多个文件或整个文件夹\n• 加密后文件会添加.enc扩展名\n• 可启用并行处理加快速度",
+            TranslationKeys.BATCH_TIPS_DECRYPT: "• 支持批量解密多个文件或整个文件夹\n• 自动识别.enc扩展名\n• 密码模式需要输入正确密码",
+            TranslationKeys.BATCH_SELECT_FILES_DIALOG_TITLE: "选择文件",
+            TranslationKeys.BATCH_SELECT_FOLDER_DIALOG_TITLE: "选择文件夹",
+            TranslationKeys.BATCH_SELECT_RECURSIVE: "选择文件夹（递归）",
         }
     
     def _get_english_translations(self) -> Dict[str, str]:
@@ -584,6 +697,62 @@ class Translator:
             TranslationKeys.RESTART_REQUIRED_INSTRUCTIONS: "Please restart the interface for the changes to take effect. Click \"Restart Now\" to close the settings dialog and restart the interface.",
             TranslationKeys.RESTART_NOW_BUTTON: "Restart Now",
             TranslationKeys.RESTART_LATER_BUTTON: "Restart Later",
+
+            # Batch operation translations
+            TranslationKeys.BATCH_OPERATION: "Batch Operation",
+            TranslationKeys.BATCH_TAB_TITLE: "Batch Encryption/Decryption",
+            TranslationKeys.BATCH_SELECT_FILES: "Select Files",
+            TranslationKeys.BATCH_SELECT_FOLDER: "Select Folder",
+            TranslationKeys.BATCH_SELECT_RECURSIVE: "Select Folder Recursively",
+            TranslationKeys.BATCH_SELECTED_FILES: "Selected files: {count} files",
+            TranslationKeys.BATCH_SELECTED_FOLDER: "Selected folder: {path}",
+            TranslationKeys.BATCH_SELECTED_RECURSIVE: "Selected folder (recursive): {path}",
+            TranslationKeys.BATCH_PROCESSING_MODE: "Processing mode:",
+            TranslationKeys.BATCH_PROCESSING_MODE_FILES: "Multiple files",
+            TranslationKeys.BATCH_PROCESSING_MODE_FOLDER: "Folder contents",
+            TranslationKeys.BATCH_PROCESSING_MODE_RECURSIVE: "Folder contents (recursive)",
+            TranslationKeys.BATCH_OUTPUT_DIRECTORY: "Output directory:",
+            TranslationKeys.BATCH_PRESERVE_STRUCTURE: "Preserve directory structure",
+            TranslationKeys.BATCH_ENABLE_PARALLEL: "Enable parallel processing",
+            TranslationKeys.BATCH_MAX_THREADS: "Max threads:",
+            TranslationKeys.BATCH_START_ENCRYPTION: "Start Batch Encryption",
+            TranslationKeys.BATCH_START_DECRYPTION: "Start Batch Decryption",
+            TranslationKeys.BATCH_CANCEL_PROCESSING: "Cancel Processing",
+            TranslationKeys.BATCH_PROGRESS_TOTAL: "Total files: {total}",
+            TranslationKeys.BATCH_PROGRESS_CURRENT: "Current progress: {current}/{total}",
+            TranslationKeys.BATCH_PROGRESS_FILE: "Processing: {filename}",
+            TranslationKeys.BATCH_PROGRESS_SUCCESS: "Success: {success}",
+            TranslationKeys.BATCH_PROGRESS_FAILED: "Failed: {failed}",
+            TranslationKeys.BATCH_PROGRESS_ELAPSED: "Elapsed: {elapsed}",
+            TranslationKeys.BATCH_PROGRESS_SPEED: "Speed: {speed} MB/s",
+            TranslationKeys.BATCH_STATUS_COLLECTING: "Collecting files...",
+            TranslationKeys.BATCH_STATUS_PROCESSING: "Processing...",
+            TranslationKeys.BATCH_STATUS_COMPLETED: "Processing completed",
+            TranslationKeys.BATCH_STATUS_CANCELLED: "Processing cancelled",
+            TranslationKeys.BATCH_RESULTS_TITLE: "Batch Processing Results",
+            TranslationKeys.BATCH_RESULTS_SUCCESS: "Success: {count} files",
+            TranslationKeys.BATCH_RESULTS_FAILED: "Failed: {count} files",
+            TranslationKeys.BATCH_RESULTS_SKIPPED: "Skipped: {count} files",
+            TranslationKeys.BATCH_RESULTS_SUCCESS_RATE: "Success rate: {rate}%",
+            TranslationKeys.BATCH_RESULTS_TOTAL_SIZE: "Total size: {size}",
+            TranslationKeys.BATCH_RESULTS_PROCESSED_SIZE: "Processed: {size}",
+            TranslationKeys.BATCH_RESULTS_ELAPSED_TIME: "Elapsed time: {time}",
+            TranslationKeys.BATCH_RESULTS_AVG_SPEED: "Average speed: {speed} MB/s",
+            TranslationKeys.BATCH_NO_FILES_SELECTED: "No files selected",
+            TranslationKeys.BATCH_INVALID_OUTPUT_DIR: "Invalid output directory",
+            TranslationKeys.BATCH_OPERATION_STARTED: "Batch operation started",
+            TranslationKeys.BATCH_OPERATION_COMPLETED: "Batch operation completed",
+            TranslationKeys.BATCH_OPERATION_CANCELLED: "Batch operation cancelled",
+            TranslationKeys.BATCH_OPERATION_FAILED: "Batch operation failed: {error}",
+            TranslationKeys.BATCH_ERROR_INVALID_PATHS: "Invalid paths",
+            TranslationKeys.BATCH_ERROR_NO_OUTPUT: "Please specify output directory",
+            TranslationKeys.BATCH_ERROR_PROCESSING_ACTIVE: "Processing already in progress",
+            TranslationKeys.BATCH_TIPS_TITLE: "Batch Operation Tips",
+            TranslationKeys.BATCH_TIPS_ENCRYPT: "• Supports batch encryption of multiple files or entire folders\n• Encrypted files get .enc extension\n• Enable parallel processing for faster speed",
+            TranslationKeys.BATCH_TIPS_DECRYPT: "• Supports batch decryption of multiple files or entire folders\n• Automatically recognizes .enc extension\n• Password mode requires correct password",
+            TranslationKeys.BATCH_SELECT_FILES_DIALOG_TITLE: "Select Files",
+            TranslationKeys.BATCH_SELECT_FOLDER_DIALOG_TITLE: "Select Folder",
+            TranslationKeys.BATCH_SELECT_RECURSIVE: "Select Folder Recursively",
         }
     
     def translate(self, key: str, **kwargs) -> str:

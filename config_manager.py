@@ -101,6 +101,11 @@ class ConfigurationManager:
             "advanced.debug_mode": ConfigStatus.IMPLEMENTED,        # 基本调试支持
             "advanced.log_level": ConfigStatus.IMPLEMENTED,         # 基本日志支持
             "advanced.buffer_size": ConfigStatus.IMPLEMENTED,       # 分块处理支持
+
+            # 批量配置
+            "batch.parallel_processing": ConfigStatus.IMPLEMENTED,  # 并行处理支持
+            "batch.max_threads": ConfigStatus.IMPLEMENTED,          # 最大线程数支持
+            "batch.preserve_structure": ConfigStatus.IMPLEMENTED,   # 保持目录结构支持
         }
     
     def _get_default_config(self) -> Dict[str, Any]:
@@ -141,6 +146,11 @@ class ConfigurationManager:
                 "debug_mode": False,
                 "log_level": "INFO",  # DEBUG, INFO, WARNING, ERROR
                 "buffer_size": 10,    # MB - 用于文件分块处理
+            },
+            "batch": {
+                "parallel_processing": False,  # 是否启用并行处理
+                "max_threads": 4,              # 最大线程数
+                "preserve_structure": True,    # 保持目录结构
             }
         }
     

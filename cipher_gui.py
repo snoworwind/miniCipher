@@ -172,21 +172,24 @@ class CipherGUI:
                                       font=("Segoe UI", 10))
         self.algorithm_info.grid(row=1, column=0, columnspan=6, padx=5, pady=5)
         
-        # 创建加密和解密框架的容器
-        frames_container = ttk.Frame(main_container)
-        frames_container.pack(fill="both", expand=True, pady=10)
+        # 创建标签页容器
+        self.notebook = ttk.Notebook(main_container)
+        self.notebook.pack(fill="both", expand=True, pady=10)
         
-        # 加密部分
-        frame_encrypt = ttk.LabelFrame(frames_container, text=_(TranslationKeys.ENCRYPTION))
-        frame_encrypt.pack(side="left", fill="both", expand=True, padx=5, pady=5)
-        
+        # 加密标签页
+        frame_encrypt = ttk.Frame(self.notebook)
+        self.notebook.add(frame_encrypt, text=_(TranslationKeys.ENCRYPTION))
         self._setup_encrypt_frame(frame_encrypt)
         
-        # 解密部分
-        frame_decrypt = ttk.LabelFrame(frames_container, text=_(TranslationKeys.DECRYPTION))
-        frame_decrypt.pack(side="right", fill="both", expand=True, padx=5, pady=5)
-        
+        # 解密标签页
+        frame_decrypt = ttk.Frame(self.notebook)
+        self.notebook.add(frame_decrypt, text=_(TranslationKeys.DECRYPTION))
         self._setup_decrypt_frame(frame_decrypt)
+        
+        # 批量操作标签页
+        frame_batch = ttk.Frame(self.notebook)
+        self.notebook.add(frame_batch, text=_(TranslationKeys.BATCH_TAB_TITLE))
+        self._setup_batch_frame(frame_batch)
         
         # 状态栏
         self.status_bar = tk.Label(self.root, text=_(TranslationKeys.READY), bd=1, relief=tk.SUNKEN, anchor=tk.W)
@@ -253,6 +256,148 @@ class CipherGUI:
         ttk.Label(frame, text=_(TranslationKeys.TIPS), font=("Segoe UI", 10, "bold")).grid(row=5, column=0, sticky="w", padx=10)
         ttk.Label(frame, text=_(TranslationKeys.TIPS_DECRYPT), 
                 justify="left").grid(row=5, column=1, columnspan=2, sticky="w", padx=10)
+
+    def _setup_batch_frame(self, frame):
+        """设置批量操作部分的UI"""
+        # 批量操作标题
+        ttk.Label(frame, text=_(TranslationKeys.BATCH_OPERATION), font=("Segoe UI", 12, "bold")).grid(row=0, column=0, columnspan=4, padx=10, pady=15, sticky="w")
+        
+        # 文件选择模式
+        ttk.Label(frame, text=_(TranslationKeys.BATCH_PROCESSING_MODE)).grid(row=1, column=0, padx=10, pady=10, sticky="w")
+        self.batch_mode_var = tk.StringVar(value="files")
+        self.batch_mode_combo = ttk.Combobox(
+            frame,
+            textvariable=self.batch_mode_var,
+            values=[
+                _(TranslationKeys.BATCH_PROCESSING_MODE_FILES),
+                _(TranslationKeys.BATCH_PROCESSING_MODE_FOLDER),
+                _(TranslationKeys.BATCH_PROCESSING_MODE_RECURSIVE)
+            ],
+            state="readonly",
+            width=20
+        )
+        self.batch_mode_combo.grid(row=1, column=1, padx=10, pady=10, sticky="w")
+        
+        # 选择文件/文件夹按钮
+        self.batch_select_button = ttk.Button(frame, text=_(TranslationKeys.BATCH_SELECT_FILES), command=self.batch_select_files)
+        self.batch_select_button.grid(row=1, column=2, padx=10, pady=10)
+        
+        # 已选文件/文件夹标签
+        self.batch_selected_label = ttk.Label(frame, text="", wraplength=400)
+        self.batch_selected_label.grid(row=2, column=0, columnspan=4, padx=10, pady=5, sticky="w")
+        
+        # 输出目录
+        ttk.Label(frame, text=_(TranslationKeys.BATCH_OUTPUT_DIRECTORY)).grid(row=3, column=0, padx=10, pady=10, sticky="w")
+        self.batch_output_entry = ttk.Entry(frame, width=50)
+        self.batch_output_entry.grid(row=3, column=1, padx=10, pady=10)
+        ttk.Button(frame, text=_(TranslationKeys.BROWSE), command=lambda: self.browse_directory(self.batch_output_entry, is_output=True)).grid(row=3, column=2, padx=10, pady=10)
+        
+        # 保持目录结构选项
+        self.batch_preserve_var = tk.BooleanVar(value=self.config_manager.get("batch.preserve_structure", True))
+        self.batch_preserve_check = ttk.Checkbutton(
+            frame, 
+            text=_(TranslationKeys.BATCH_PRESERVE_STRUCTURE),
+            variable=self.batch_preserve_var
+        )
+        self.batch_preserve_check.grid(row=4, column=0, columnspan=3, padx=10, pady=5, sticky="w")
+        
+        # 并行处理选项
+        self.batch_parallel_var = tk.BooleanVar(value=self.config_manager.get("batch.parallel_processing", False))
+        self.batch_parallel_check = ttk.Checkbutton(
+            frame,
+            text=_(TranslationKeys.BATCH_ENABLE_PARALLEL),
+            variable=self.batch_parallel_var,
+            command=self._update_batch_parallel_options
+        )
+        self.batch_parallel_check.grid(row=5, column=0, padx=10, pady=5, sticky="w")
+        
+        # 最大线程数（默认隐藏）
+        ttk.Label(frame, text=_(TranslationKeys.BATCH_MAX_THREADS)).grid(row=6, column=0, padx=10, pady=5, sticky="w")
+        self.batch_max_threads_var = tk.StringVar(value=str(self.config_manager.get("batch.max_threads", 4)))
+        self.batch_max_threads_spinbox = ttk.Spinbox(
+            frame,
+            from_=1,
+            to=16,
+            textvariable=self.batch_max_threads_var,
+            width=5,
+            state="disabled"  # 默认禁用
+        )
+        self.batch_max_threads_spinbox.grid(row=6, column=1, padx=10, pady=5, sticky="w")
+        
+        # 进度显示区域
+        ttk.Label(frame, text=_(TranslationKeys.BATCH_PROGRESS_TOTAL, total=0)).grid(row=7, column=0, padx=10, pady=10, sticky="w")
+        self.batch_progress_total_label = ttk.Label(frame, text="")
+        self.batch_progress_total_label.grid(row=7, column=1, columnspan=3, padx=10, pady=10, sticky="w")
+        
+        ttk.Label(frame, text=_(TranslationKeys.BATCH_PROGRESS_CURRENT, current=0, total=0)).grid(row=8, column=0, padx=10, pady=5, sticky="w")
+        self.batch_progress_current_label = ttk.Label(frame, text="")
+        self.batch_progress_current_label.grid(row=8, column=1, columnspan=3, padx=10, pady=5, sticky="w")
+        
+        ttk.Label(frame, text=_(TranslationKeys.BATCH_PROGRESS_FILE, filename="")).grid(row=9, column=0, padx=10, pady=5, sticky="w")
+        self.batch_progress_file_label = ttk.Label(frame, text="")
+        self.batch_progress_file_label.grid(row=9, column=1, columnspan=3, padx=10, pady=5, sticky="w")
+        
+        # 进度条
+        self.batch_progress_bar = ttk.Progressbar(frame, mode="determinate", length=400)
+        self.batch_progress_bar.grid(row=10, column=0, columnspan=4, padx=10, pady=15)
+        
+        # 批量操作按钮容器
+        button_frame = ttk.Frame(frame)
+        button_frame.grid(row=11, column=0, columnspan=4, pady=20)
+        
+        # 批量加密按钮
+        self.batch_encrypt_button = ttk.Button(
+            button_frame,
+            text=_(TranslationKeys.BATCH_START_ENCRYPTION),
+            command=self.batch_encrypt,
+            style="Success.TButton"
+        )
+        self.batch_encrypt_button.pack(side="left", padx=5)
+        
+        # 批量解密按钮
+        self.batch_decrypt_button = ttk.Button(
+            button_frame,
+            text=_(TranslationKeys.BATCH_START_DECRYPTION),
+            command=self.batch_decrypt,
+            style="Primary.TButton"
+        )
+        self.batch_decrypt_button.pack(side="left", padx=5)
+        
+        # 取消按钮（默认禁用）
+        self.batch_cancel_button = ttk.Button(
+            button_frame,
+            text=_(TranslationKeys.BATCH_CANCEL_PROCESSING),
+            command=self.batch_cancel_processing,
+            state="disabled"
+        )
+        self.batch_cancel_button.pack(side="left", padx=5)
+        
+        # 状态标签
+        self.batch_status_label = ttk.Label(frame, text="", font=("Segoe UI", 10))
+        self.batch_status_label.grid(row=12, column=0, columnspan=4, padx=10, pady=10)
+        
+        # 统计信息标签
+        self.batch_stats_label = ttk.Label(frame, text="", justify="left", wraplength=500)
+        self.batch_stats_label.grid(row=13, column=0, columnspan=4, padx=10, pady=10)
+        
+        # 提示信息
+        ttk.Label(frame, text=_(TranslationKeys.BATCH_TIPS_TITLE), font=("Segoe UI", 10, "bold")).grid(row=14, column=0, sticky="w", padx=10)
+        ttk.Label(frame, text=_(TranslationKeys.BATCH_TIPS_ENCRYPT) + "\n\n" + _(TranslationKeys.BATCH_TIPS_DECRYPT), 
+                justify="left").grid(row=14, column=1, columnspan=3, sticky="w", padx=10)
+        
+        # 初始化批量处理器变量
+        self.batch_cipher = None
+        self.batch_selected_paths = []
+        self.batch_is_processing = False
+        self.batch_processing_thread = None
+        self.batch_last_mode = "files"
+        
+        # 绑定事件
+        self.batch_mode_combo.bind("<<ComboboxSelected>>", self._on_batch_mode_changed)
+        
+        # 初始化状态
+        self._update_batch_select_button()
+        self._update_batch_parallel_options()
     
     def on_algorithm_changed(self, event=None):
         """算法选择变更处理"""
@@ -1523,6 +1668,466 @@ class CipherGUI:
                 self._change_theme(current_theme)
             except Exception as inner_e:
                 logging.error(f"恢复界面时也出错: {inner_e}")
+    
+    def batch_select_files(self):
+        """选择批量处理的文件或文件夹"""
+        mode = self.batch_mode_var.get()
+        
+        # 根据模式选择对话框类型
+        if mode == _(TranslationKeys.BATCH_PROCESSING_MODE_FILES):
+            # 多文件选择
+            selected_files = filedialog.askopenfilenames(
+                title=_(TranslationKeys.BATCH_SELECT_FILES_DIALOG_TITLE)
+            )
+            if selected_files:
+                self.batch_selected_paths = list(selected_files)
+                # 更新显示
+                if len(self.batch_selected_paths) == 1:
+                    self.batch_selected_label.config(text=_("已选择1个文件: {}").format(self.batch_selected_paths[0]))
+                else:
+                    self.batch_selected_label.config(text=_("已选择{}个文件").format(len(self.batch_selected_paths)))
+                
+                # 自动生成输出目录建议
+                if self.batch_selected_paths and not self.batch_output_entry.get():
+                    first_file_dir = os.path.dirname(self.batch_selected_paths[0])
+                    default_output = os.path.join(first_file_dir, "batch_processed")
+                    self.batch_output_entry.delete(0, tk.END)
+                    self.batch_output_entry.insert(0, default_output)
+        
+        elif mode == _(TranslationKeys.BATCH_PROCESSING_MODE_FOLDER):
+            # 单个文件夹选择
+            selected_dir = filedialog.askdirectory(
+                title=_(TranslationKeys.BATCH_SELECT_FOLDER_DIALOG_TITLE)
+            )
+            if selected_dir:
+                self.batch_selected_paths = [selected_dir]
+                self.batch_selected_label.config(text=_("已选择文件夹: {}").format(selected_dir))
+                
+                # 自动生成输出目录建议
+                if not self.batch_output_entry.get():
+                    default_output = os.path.join(selected_dir, "batch_processed")
+                    self.batch_output_entry.delete(0, tk.END)
+                    self.batch_output_entry.insert(0, default_output)
+        
+        elif mode == _(TranslationKeys.BATCH_PROCESSING_MODE_RECURSIVE):
+            # 递归文件夹选择（同单个文件夹，但会递归处理子文件夹）
+            selected_dir = filedialog.askdirectory(
+                title=_(TranslationKeys.BATCH_SELECT_RECURSIVE)
+            )
+            if selected_dir:
+                self.batch_selected_paths = [selected_dir]
+                self.batch_selected_label.config(text=_("已选择文件夹（包含子文件夹）: {}").format(selected_dir))
+                
+                # 自动生成输出目录建议
+                if not self.batch_output_entry.get():
+                    default_output = os.path.join(selected_dir, "batch_processed")
+                    self.batch_output_entry.delete(0, tk.END)
+                    self.batch_output_entry.insert(0, default_output)
+    
+    def _on_batch_mode_changed(self, event=None):
+        """批量处理模式变更处理"""
+        # 更新选择按钮文本
+        self._update_batch_select_button()
+        
+        # 清空之前的选择
+        self.batch_selected_paths = []
+        self.batch_selected_label.config(text="")
+        
+        # 重置进度显示
+        self._reset_batch_progress()
+    
+    def _update_batch_select_button(self):
+        """更新批量选择按钮文本"""
+        mode = self.batch_mode_var.get()
+        
+        if mode == _(TranslationKeys.BATCH_PROCESSING_MODE_FILES):
+            self.batch_select_button.config(text=_(TranslationKeys.BATCH_SELECT_FILES))
+        elif mode == _(TranslationKeys.BATCH_PROCESSING_MODE_FOLDER):
+            self.batch_select_button.config(text=_(TranslationKeys.BATCH_SELECT_FOLDER))
+        elif mode == _(TranslationKeys.BATCH_PROCESSING_MODE_RECURSIVE):
+            self.batch_select_button.config(text=_(TranslationKeys.BATCH_SELECT_RECURSIVE))
+    
+    def _update_batch_parallel_options(self):
+        """更新并行处理选项状态"""
+        if self.batch_parallel_var.get():
+            self.batch_max_threads_spinbox.config(state="normal")
+        else:
+            self.batch_max_threads_spinbox.config(state="disabled")
+    
+    def _reset_batch_progress(self):
+        """重置批量处理进度显示"""
+        self.batch_progress_bar["value"] = 0
+        self.batch_progress_total_label.config(text="")
+        self.batch_progress_current_label.config(text="")
+        self.batch_progress_file_label.config(text="")
+        self.batch_status_label.config(text="")
+        self.batch_stats_label.config(text="")
+    
+    def _update_batch_progress(self, progress_info):
+        """更新批量处理进度显示
+        
+        Args:
+            progress_info: 包含进度信息的字典，包含以下字段：
+                - total_files: 总文件数
+                - processed_files: 已处理文件数
+                - current_file: 当前处理文件名
+                - current_progress: 当前文件处理进度 (0-100)
+                - status: 状态消息
+                - stats: 统计信息
+        """
+        try:
+            total_files = progress_info.get("total_files", 0)
+            processed_files = progress_info.get("processed_files", 0)
+            current_file = progress_info.get("current_file", "")
+            current_progress = progress_info.get("current_progress", 0)
+            status = progress_info.get("status", "")
+            stats = progress_info.get("stats", "")
+            
+            # 更新总进度
+            if total_files > 0:
+                total_percent = (processed_files / total_files) * 100
+                self.batch_progress_bar["value"] = total_percent
+                
+                # 更新标签
+                self.batch_progress_total_label.config(
+                    text=_(TranslationKeys.BATCH_PROGRESS_TOTAL, total=total_files)
+                )
+                self.batch_progress_current_label.config(
+                    text=_(TranslationKeys.BATCH_PROGRESS_CURRENT, current=processed_files, total=total_files)
+                )
+            
+            # 更新当前文件信息
+            if current_file:
+                self.batch_progress_file_label.config(
+                    text=_(TranslationKeys.BATCH_PROGRESS_FILE, filename=os.path.basename(current_file))
+                )
+            
+            # 更新状态和统计信息
+            if status:
+                self.batch_status_label.config(text=status)
+            if stats:
+                self.batch_stats_label.config(text=stats)
+            
+            # 更新UI
+            self.root.update_idletasks()
+            
+        except Exception as e:
+            logging.error(f"更新批量进度时出错: {e}")
+    
+    def batch_encrypt(self):
+        """批量加密文件"""
+        # 检查是否正在处理中
+        if self.batch_is_processing:
+            self._show_error_message(_("批量处理正在进行中，请等待完成或取消"))
+            return
+        
+        # 验证输入
+        if not self.batch_selected_paths:
+            self._show_error_message(_("请先选择要处理的文件或文件夹"))
+            return
+        
+        output_dir = self.batch_output_entry.get().strip()
+        if not output_dir:
+            self._show_error_message(_("请指定输出目录"))
+            return
+        
+        # 检查输出目录是否存在，尝试创建
+        try:
+            os.makedirs(output_dir, exist_ok=True)
+        except PermissionError as e:
+            self._show_error_message(_(TranslationKeys.ERROR_PERMISSION_DENIED))
+            return
+        
+        # 获取算法和密钥类型
+        algorithm = self.algorithm_var.get()
+        key_type = self.key_type_var.get()
+        password = self.password_entry.get().strip() if key_type == "password" else None
+        
+        # 对于密码模式，验证密码强度
+        if algorithm == "AES256" and key_type == "password":
+            if not password:
+                self._show_error_message(_("密码模式需要输入密码"))
+                return
+            
+            # 验证密码强度
+            is_valid, msg = self._validate_password_strength(password)
+            if not is_valid:
+                self._show_error_message(msg)
+                return
+        
+        # 获取批量处理配置
+        preserve_structure = self.batch_preserve_var.get()
+        parallel_processing = self.batch_parallel_var.get()
+        max_threads = int(self.batch_max_threads_var.get()) if parallel_processing else 1
+        
+        try:
+            # 创建批量处理器
+            from batch_cipher import BatchOperationType, create_batch_cipher
+            self.batch_cipher = create_batch_cipher()
+            
+            # 设置回调函数
+            def progress_callback(progress_info):
+                self._update_batch_progress(progress_info)
+            
+            # 开始批量处理
+            self.batch_is_processing = True
+            self.batch_encrypt_button.config(state="disabled")
+            self.batch_decrypt_button.config(state="disabled")
+            self.batch_cancel_button.config(state="normal")
+            
+            # 在后台线程中执行批量处理
+            import threading
+            self.batch_processing_thread = threading.Thread(
+                target=self._execute_batch_operation,
+                args=(
+                    BatchOperationType.ENCRYPT,
+                    algorithm,
+                    key_type,
+                    password,
+                    output_dir,
+                    preserve_structure,
+                    parallel_processing,
+                    max_threads,
+                    progress_callback
+                ),
+                daemon=True
+            )
+            self.batch_processing_thread.start()
+            
+        except Exception as e:
+            self._show_error_message(_("开始批量加密失败: {error}", error=str(e)))
+            self._reset_batch_processing_state()
+    
+    def batch_decrypt(self):
+        """批量解密文件"""
+        # 检查是否正在处理中
+        if self.batch_is_processing:
+            self._show_error_message(_("批量处理正在进行中，请等待完成或取消"))
+            return
+        
+        # 验证输入
+        if not self.batch_selected_paths:
+            self._show_error_message(_("请先选择要处理的文件或文件夹"))
+            return
+        
+        output_dir = self.batch_output_entry.get().strip()
+        if not output_dir:
+            self._show_error_message(_("请指定输出目录"))
+            return
+        
+        # 检查输出目录是否存在，尝试创建
+        try:
+            os.makedirs(output_dir, exist_ok=True)
+        except PermissionError as e:
+            self._show_error_message(_(TranslationKeys.ERROR_PERMISSION_DENIED))
+            return
+        
+        # 获取算法和密钥类型
+        algorithm = self.algorithm_var.get()
+        key_type = self.key_type_var.get()
+        
+        # 对于密码模式，需要密码
+        password = None
+        if algorithm == "AES256" and key_type == "password":
+            password = self.password_entry.get().strip()
+            if not password:
+                self._show_error_message(_("密码模式需要输入密码"))
+                return
+        
+        # 获取批量处理配置
+        preserve_structure = self.batch_preserve_var.get()
+        parallel_processing = self.batch_parallel_var.get()
+        max_threads = int(self.batch_max_threads_var.get()) if parallel_processing else 1
+        
+        try:
+            # 创建批量处理器
+            from batch_cipher import BatchOperationType, create_batch_cipher
+            self.batch_cipher = create_batch_cipher()
+            
+            # 设置回调函数
+            def progress_callback(progress_info):
+                self._update_batch_progress(progress_info)
+            
+            # 开始批量处理
+            self.batch_is_processing = True
+            self.batch_encrypt_button.config(state="disabled")
+            self.batch_decrypt_button.config(state="disabled")
+            self.batch_cancel_button.config(state="normal")
+            
+            # 在后台线程中执行批量处理
+            import threading
+            self.batch_processing_thread = threading.Thread(
+                target=self._execute_batch_operation,
+                args=(
+                    BatchOperationType.DECRYPT,
+                    algorithm,
+                    key_type,
+                    password,
+                    output_dir,
+                    preserve_structure,
+                    parallel_processing,
+                    max_threads,
+                    progress_callback
+                ),
+                daemon=True
+            )
+            self.batch_processing_thread.start()
+            
+        except Exception as e:
+            self._show_error_message(_("开始批量解密失败: {error}", error=str(e)))
+            self._reset_batch_processing_state()
+    
+    def _execute_batch_operation(self, operation_type, algorithm, key_type, password, 
+                               output_dir, preserve_structure, parallel_processing, 
+                               max_threads, progress_callback):
+        """执行批量操作的内部方法（在线程中运行）"""
+        try:
+            # 获取处理模式
+            mode = self.batch_mode_var.get()
+            
+            # 将GUI模式字符串转换为BatchProcessingMode枚举
+            from batch_cipher import BatchProcessingMode, BatchOperationType
+            
+            # 映射模式字符串到枚举
+            mode_mapping = {
+                _(TranslationKeys.BATCH_PROCESSING_MODE_FILES): BatchProcessingMode.FILES,
+                _(TranslationKeys.BATCH_PROCESSING_MODE_FOLDER): BatchProcessingMode.FOLDER,
+                _(TranslationKeys.BATCH_PROCESSING_MODE_RECURSIVE): BatchProcessingMode.FOLDER_RECURSIVE
+            }
+            
+            batch_mode = mode_mapping.get(mode, BatchProcessingMode.FILES)
+            
+            # 创建批量处理器（如果尚未创建）
+            if self.batch_cipher is None:
+                from batch_cipher import create_batch_cipher
+                self.batch_cipher = create_batch_cipher()
+            
+            # 配置批量处理器
+            self.batch_cipher.preserve_structure = preserve_structure
+            self.batch_cipher.parallel_processing = parallel_processing
+            self.batch_cipher.max_threads = max_threads
+            
+            # 添加回调函数
+            def progress_wrapper(current: int, total: int, current_file: str):
+                """包装进度回调"""
+                progress_info = {
+                    "total_files": total,
+                    "processed_files": current,
+                    "current_file": current_file,
+                    "current_progress": (current / total * 100) if total > 0 else 0,
+                    "status": f"正在处理 {current}/{total}: {os.path.basename(current_file)}"
+                }
+                self.root.after(0, progress_callback, progress_info)
+            
+            def status_wrapper(message: str):
+                """包装状态回调"""
+                progress_info = {
+                    "status": message,
+                    "stats": ""
+                }
+                self.root.after(0, progress_callback, progress_info)
+            
+            self.batch_cipher.add_progress_callback(progress_wrapper)
+            self.batch_cipher.add_status_callback(status_wrapper)
+            
+            # 执行批量处理
+            batch_result = self.batch_cipher.process_batch(
+                source_paths=self.batch_selected_paths,
+                output_dir=output_dir,
+                operation_type=BatchOperationType.ENCRYPT if operation_type == BatchOperationType.ENCRYPT else BatchOperationType.DECRYPT,
+                algorithm=algorithm,
+                key_type=key_type,
+                password=password,
+                mode=batch_mode
+            )
+            
+            # 准备结果
+            result = {
+                "success_count": batch_result.successful_files,
+                "fail_count": batch_result.failed_files,
+                "total_count": batch_result.total_files,
+                "processed_size": batch_result.processed_size_bytes,
+                "total_size": batch_result.total_size_bytes,
+                "elapsed_time": batch_result.elapsed_time,
+                "success_rate": batch_result.success_rate,
+                "average_speed": batch_result.average_speed,
+                "statistics": f"批量处理完成: {batch_result.successful_files} 成功, {batch_result.failed_files} 失败, 耗时 {batch_result.elapsed_time:.1f}秒",
+                "failed_files": []
+            }
+            
+            # 处理完成后更新UI
+            self.root.after(0, self._handle_batch_completion, result)
+            
+        except Exception as e:
+            logging.error(f"批量处理失败: {e}")
+            error_msg = _("批量处理失败: {error}", error=str(e))
+            self.root.after(0, lambda: self._show_error_message(error_msg))
+            self.root.after(0, self._reset_batch_processing_state)
+    
+    def _handle_batch_completion(self, result):
+        """处理批量操作完成"""
+        try:
+            # 重置处理状态
+            self._reset_batch_processing_state()
+            
+            # 显示统计信息
+            stats_text = result.get("statistics", "")
+            if stats_text:
+                self.batch_stats_label.config(text=stats_text)
+            
+            # 显示完成消息
+            success_count = result.get("success_count", 0)
+            fail_count = result.get("fail_count", 0)
+            total_count = success_count + fail_count
+            
+            if fail_count == 0:
+                message = _("批量处理完成！成功处理 {success_count}/{total_count} 个文件").format(
+                    success_count=success_count, total_count=total_count
+                )
+                self._show_success_message(message)
+                self.batch_status_label.config(text=message)
+            elif success_count == 0:
+                message = _("批量处理失败！所有 {fail_count} 个文件处理失败").format(fail_count=fail_count)
+                self._show_error_message(message)
+                self.batch_status_label.config(text=message)
+            else:
+                message = _("批量处理部分完成！成功 {success_count} 个，失败 {fail_count} 个").format(
+                    success_count=success_count, fail_count=fail_count
+                )
+                self._show_success_message(message)
+                self.batch_status_label.config(text=message)
+            
+            # 如果有失败的文件，显示详细错误信息
+            if result.get("failed_files"):
+                failed_list = "\n".join([f"- {f.get('file', '未知')}: {f.get('error', '未知错误')}" 
+                                       for f in result["failed_files"][:5]])  # 只显示前5个
+                if len(result["failed_files"]) > 5:
+                    failed_list += f"\n... 还有 {len(result['failed_files']) - 5} 个失败文件"
+                
+                self.batch_stats_label.config(text=failed_list)
+            
+        except Exception as e:
+            logging.error(f"处理批量完成时出错: {e}")
+    
+    def batch_cancel_processing(self):
+        """取消批量处理"""
+        if self.batch_is_processing and self.batch_cipher:
+            try:
+                # 尝试取消批量处理
+                self.batch_cipher.cancel_processing()
+                self.batch_status_label.config(text=_("正在取消处理..."))
+            except Exception as e:
+                logging.error(f"取消批量处理时出错: {e}")
+    
+    def _reset_batch_processing_state(self):
+        """重置批量处理状态"""
+        self.batch_is_processing = False
+        self.batch_processing_thread = None
+        
+        # 恢复按钮状态
+        self.batch_encrypt_button.config(state="normal")
+        self.batch_decrypt_button.config(state="normal")
+        self.batch_cancel_button.config(state="disabled")
     
     def run(self):
         """运行GUI"""

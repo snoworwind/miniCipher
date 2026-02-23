@@ -1282,7 +1282,7 @@ class FileCipher:
         参数:
             key: 密钥字节
             output_dir: 输出目录
-            base_name: 基础文件名
+            base_name: 基础文件名（包含完整文件名和扩展名，如"10.txt"）
             algorithm: 算法名称
             key_type: 密钥类型
             
@@ -1290,6 +1290,9 @@ class FileCipher:
             str: 密钥文件路径
         """
         import os
+        import logging
+        
+        logging.debug(f"保存密钥文件: base_name={base_name}, algorithm={algorithm}, key_type={key_type}")
         
         # 获取配置
         otp_key_format = "hex"  # 默认十六进制格式
@@ -1299,24 +1302,33 @@ class FileCipher:
             except:
                 pass
         
+        # 确保base_name是完整的文件名（可能已经包含扩展名）
+        # 对于AES256随机密钥模式，base_name应该是完整文件名（如"10.txt"）
+        # 对于OTP，base_name也应该是完整文件名
+        
         if algorithm == "OTP":
             if otp_key_format == "binary":
                 # 二进制格式
                 key_file = os.path.join(output_dir, f"key_{base_name}.bin")
                 with open(key_file, 'wb') as f:
                     f.write(key)
+                logging.debug(f"保存OTP二进制密钥文件: {key_file}")
             else:
                 # 十六进制格式（默认）
                 key_file = os.path.join(output_dir, f"key_{base_name}.txt")
                 with open(key_file, 'w') as f:
                     f.write(key.hex())
+                logging.debug(f"保存OTP十六进制密钥文件: {key_file}")
         else:  # AES256
             if key_type == "random":
+                # 使用完整文件名，包含扩展名（如"key_10.txt.key"）
                 key_file = os.path.join(output_dir, f"key_{base_name}.key")
                 with open(key_file, 'wb') as f:
                     f.write(key)
+                logging.debug(f"保存AES随机密钥文件: {key_file}")
             else:
                 # 密码模式不保存密钥文件
+                logging.debug("密码模式，不保存密钥文件")
                 return None
         
         return key_file

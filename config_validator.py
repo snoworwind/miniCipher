@@ -406,6 +406,25 @@ class ConfigValidationRules:
                 "max_val": 100,
                 "required": True,
                 "default": 10
+            },
+
+            # 批量配置
+            "batch.parallel_processing": {
+                "type": "boolean",
+                "required": True,
+                "default": False
+            },
+            "batch.max_threads": {
+                "type": "integer",
+                "min_val": 1,
+                "max_val": 16,
+                "required": True,
+                "default": 4
+            },
+            "batch.preserve_structure": {
+                "type": "boolean",
+                "required": True,
+                "default": True
             }
         }
     
