@@ -76,6 +76,11 @@ key_*
 解密后文件/
 version.txt
 
+# Go build outputs
+go-migrate/minicipher
+go-migrate/minicipher-*
+go-migrate/dist/
+
 # Temporary files
 *.tmp
 *.temp

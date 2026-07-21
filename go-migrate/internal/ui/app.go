@@ -315,7 +315,7 @@ func (a *App) doEncrypt() {
 		})
 
 		if err != nil {
-			a.encStatusLabel.SetText(fmt.Sprintf("❌ %s", err.Error()))
+			a.encStatusLabel.SetText("❌ 加密失败，请检查输入文件")
 			return
 		}
 
@@ -420,7 +420,7 @@ func (a *App) doDecrypt() {
 
 		_, err := fc.DecryptFile(req)
 		if err != nil {
-			a.decStatusLabel.SetText(fmt.Sprintf("❌ %s", err.Error()))
+			a.decStatusLabel.SetText("❌ 解密失败，请检查密钥/密码是否正确")
 			return
 		}
 		a.decStatusLabel.SetText(fmt.Sprintf(a.tr.T("success.decryption"), "", outputFile))
@@ -514,7 +514,7 @@ func (a *App) doBatch(isEncrypt bool) {
 		result, err := bp.Process(op, paths, outputDir, a.cfg.Batch.PreserveStructure,
 			algo, kt, nil, []byte(password), nil, nil, nil)
 		if err != nil {
-			a.batchStatusLabel.SetText(fmt.Sprintf(a.tr.T("error.encryption_failed"), err.Error()))
+			a.batchStatusLabel.SetText("❌ 批量处理失败，请检查输入和输出路径")
 			return
 		}
 

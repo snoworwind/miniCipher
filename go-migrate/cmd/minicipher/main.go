@@ -1,9 +1,12 @@
 package main
 
 import (
+	"bufio"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/snoworwind/minicipher/internal/config"
 	"github.com/snoworwind/minicipher/internal/crypto"
@@ -35,7 +38,7 @@ func main() {
 	case "help", "-h", "--help":
 		printUsage(translator)
 	default:
-		fmt.Printf("未知命令: %s\n", os.Args[1])
+		fmt.Fprintf(os.Stderr, "未知命令: %s\n", os.Args[1])
 		printUsage(translator)
 		os.Exit(1)
 	}
@@ -44,17 +47,93 @@ func main() {
 func printUsage(t *lang.Translator) {
 	fmt.Println(`
 用法:
-  minicipher encrypt <input_file> <output_file> [--algo=AES256|OTP] [--key-type=random|password] [--password=<pwd>]
-  minicipher decrypt <input_file> <output_file> [--key-file=<path>] [--password=<pwd>]
+  minicipher encrypt <input_file> <output_file> [选项]
+  minicipher decrypt <input_file> <output_file> [选项]
   minicipher test
 
+加密选项:
+  --algo=AES256|OTP        加密算法 (默认: 配置文件设置)
+  --key-type=random|password  密钥类型 (默认: 配置文件设置)
+  --password-stdin          从标准输入读取密码 (推荐)
+  --password-env=VAR        从环境变量读取密码 (例如 --password-env=MINICIPHER_PASSWORD)
+
+解密选项:
+  --key-file=<path>         密钥文件路径
+  --password-stdin          从标准输入读取密码
+  --password-env=VAR        从环境变量读取密码
+
+密码安全说明:
+  推荐使用 --password-stdin 或环境变量方式提供密码，
+  避免密码出现在命令行参数中（命令行参数会被记录到 shell 历史）。
+  也可以通过设置环境变量 MINICIPHER_PASSWORD 来提供密码。
+
 示例:
+  # 加密（推荐：stdin 密码）
+  echo "MySecret123" | minicipher encrypt secret.txt secret.txt.enc --key-type=password --password-stdin
+
+  # 加密（环境变量密码）
+  MINICIPHER_PASSWORD=MySecret123 minicipher encrypt secret.txt secret.txt.enc --key-type=password --password-env=MINICIPHER_PASSWORD
+
+  # 加密（随机密钥 - 无需密码）
   minicipher encrypt doc.pdf doc.pdf.enc --algo=AES256 --key-type=random
-  minicipher encrypt secret.txt secret.txt.enc --key-type=password --password=MySecret123
+
+  # OTP 加密
   minicipher encrypt data.bin data.bin.enc --algo=OTP
+
+  # 解密
+  echo "MySecret123" | minicipher decrypt secret.txt.enc output.txt --password-stdin
   minicipher decrypt doc.pdf.enc output.pdf --key-file=doc.pdf.enc.key
-  minicipher decrypt secret.txt.enc output.txt --password=MySecret123
 `)
+}
+
+// readPassword reads password from the specified source
+func readPassword(passwordStdin bool, passwordEnv string, args []string) (string, error) {
+	// Priority 1: stdin (most secure, no shell history)
+	if passwordStdin {
+		reader := bufio.NewReader(os.Stdin)
+		line, err := reader.ReadString('\n')
+		if err != nil && err != io.EOF {
+			return "", fmt.Errorf("从标准输入读取密码失败: %w", err)
+		}
+		return strings.TrimRight(line, "\r\n"), nil
+	}
+
+	// Priority 2: environment variable
+	if passwordEnv != "" {
+		val := os.Getenv(passwordEnv)
+		if val != "" {
+			return val, nil
+		}
+		return "", fmt.Errorf("环境变量 %s 为空或未设置", passwordEnv)
+	}
+
+	// Priority 3: deprecated --password= flag (kept for backwards compat with warning)
+	for _, arg := range args {
+		if strings.HasPrefix(arg, "--password=") {
+			fmt.Fprintln(os.Stderr, "⚠️  警告: 使用 --password= 标志会将密码暴露在 shell 历史中。")
+			fmt.Fprintln(os.Stderr, "   推荐使用 --password-stdin 或 --password-env=MINICIPHER_PASSWORD")
+			return arg[11:], nil
+		}
+	}
+
+	return "", fmt.Errorf("密码模式需要密码。使用 --password-stdin (推荐) 或 --password-env=VAR")
+}
+
+func parseArgs(args []string) map[string]string {
+	result := make(map[string]string)
+	for _, arg := range args {
+		if strings.HasPrefix(arg, "--") {
+			eqIdx := strings.Index(arg, "=")
+			if eqIdx > 0 {
+				key := arg[:eqIdx]
+				value := arg[eqIdx+1:]
+				result[key] = value
+			} else {
+				result[arg] = "true" // boolean flag
+			}
+		}
+	}
+	return result
 }
 
 func handleEncrypt(args []string, cfg *config.Config, t *lang.Translator) {
@@ -65,20 +144,17 @@ func handleEncrypt(args []string, cfg *config.Config, t *lang.Translator) {
 
 	inputFile := args[0]
 	outputFile := args[1]
-	algo := cfg.Crypto.DefaultAlgorithm
-	keyTypeStr := cfg.Crypto.DefaultKeyType
-	var password string
 
-	for _, arg := range args[2:] {
-		if len(arg) > 7 && arg[:7] == "--algo=" {
-			algo = arg[7:]
-		}
-		if len(arg) > 11 && arg[:11] == "--key-type=" {
-			keyTypeStr = arg[11:]
-		}
-		if len(arg) > 11 && arg[:11] == "--password=" {
-			password = arg[11:]
-		}
+	parsed := parseArgs(args[2:])
+
+	algo := cfg.Crypto.DefaultAlgorithm
+	if v, ok := parsed["--algo"]; ok {
+		algo = v
+	}
+
+	keyTypeStr := cfg.Crypto.DefaultKeyType
+	if v, ok := parsed["--key-type"]; ok {
+		keyTypeStr = v
 	}
 
 	var kt crypto.KeyType
@@ -88,9 +164,28 @@ func handleEncrypt(args []string, cfg *config.Config, t *lang.Translator) {
 		kt = crypto.KeyTypeRandom
 	}
 
-	if kt == crypto.KeyTypePassword && password == "" {
-		fmt.Fprintln(os.Stderr, "错误: 密码模式需要 --password=")
-		os.Exit(1)
+	// Read password via secure channel
+	var password string
+	if kt == crypto.KeyTypePassword {
+		passwordStdin := false
+		if _, ok := parsed["--password-stdin"]; ok {
+			passwordStdin = true
+		}
+		passwordEnv := parsed["--password-env"]
+		if passwordEnv == "" {
+			// auto-detect MINICIPHER_PASSWORD if no explicit env var name
+			if v := os.Getenv("MINICIPHER_PASSWORD"); v != "" && passwordStdin == false {
+				passwordEnv = "MINICIPHER_PASSWORD"
+			}
+		}
+
+		var err error
+		password, err = readPassword(passwordStdin, passwordEnv, args[2:])
+		if err != nil || password == "" {
+			fmt.Fprintf(os.Stderr, "错误: %v\n", err)
+			fmt.Fprintf(os.Stderr, "使用: echo <密码> | %s encrypt ... --password-stdin\n", os.Args[0])
+			os.Exit(1)
+		}
 	}
 
 	if _, err := os.Stat(inputFile); os.IsNotExist(err) {
@@ -150,21 +245,32 @@ func handleDecrypt(args []string, cfg *config.Config, t *lang.Translator) {
 
 	inputFile := args[0]
 	outputFile := args[1]
-	var keyFile string
-	var password string
-	algo := "AES256"
+	parsed := parseArgs(args[2:])
 
-	for _, arg := range args[2:] {
-		if len(arg) > 11 && arg[:11] == "--key-file=" {
-			keyFile = arg[11:]
-		}
-		if len(arg) > 11 && arg[:11] == "--password=" {
-			password = arg[11:]
-		}
-		if len(arg) > 7 && arg[:7] == "--algo=" {
-			algo = arg[7:]
+	keyFile := parsed["--key-file"]
+	passwordStdin := false
+	if _, ok := parsed["--password-stdin"]; ok {
+		passwordStdin = true
+	}
+	passwordEnv := parsed["--password-env"]
+	if passwordEnv == "" {
+		if v := os.Getenv("MINICIPHER_PASSWORD"); v != "" && passwordStdin == false {
+			passwordEnv = "MINICIPHER_PASSWORD"
 		}
 	}
+
+	// Read password via secure channel
+	var password string
+	if passwordStdin || passwordEnv != "" {
+		var err error
+		password, err = readPassword(passwordStdin, passwordEnv, args[2:])
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "错误: %v\n", err)
+			os.Exit(1)
+		}
+	}
+
+	algo := "AES256"
 
 	if _, err := os.Stat(inputFile); os.IsNotExist(err) {
 		fmt.Fprintf(os.Stderr, "错误: 加密文件不存在: %s\n", inputFile)
@@ -217,7 +323,7 @@ func handleDecrypt(args []string, cfg *config.Config, t *lang.Translator) {
 			_, err = aes.DecryptFromFile(inputFile, outputFile,
 				crypto.KeyTypeRandom, key, iv, tag, nil, nil)
 		} else {
-			fmt.Fprintln(os.Stderr, "错误: 需要 --key-file= 或 --password=")
+			fmt.Fprintln(os.Stderr, "错误: 需要 --key-file= 或提供密码 (--password-stdin / --password-env)")
 			os.Exit(1)
 		}
 		if err != nil {

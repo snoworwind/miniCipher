@@ -270,12 +270,30 @@ func (bp *BatchProcessor) encryptFile(inputPath, outputPath string,
 	switch algo {
 	case "OTP":
 		otp := crypto.NewOTPAlgorithm()
-		_, err := otp.EncryptToFile(inputPath, outputPath, bp.chunkSize)
-		return err
+		result, err := otp.EncryptToFile(inputPath, outputPath, bp.chunkSize)
+		if err != nil {
+			return err
+		}
+		// 保存 OTP 密钥文件
+		keyPath := outputPath + ".key"
+		if err := os.WriteFile(keyPath, result.Key, 0600); err != nil {
+			return fmt.Errorf("保存OTP密钥文件失败: %w", err)
+		}
+		return nil
 	case "AES256":
 		aes := crypto.NewAES256Algorithm()
-		_, err := aes.EncryptToFile(inputPath, outputPath, keyType, password, salt)
-		return err
+		result, err := aes.EncryptToFile(inputPath, outputPath, keyType, password, salt)
+		if err != nil {
+			return err
+		}
+		// 保存 AES 随机密钥文件
+		if keyType == crypto.KeyTypeRandom {
+			keyPath := outputPath + ".key"
+			if err := crypto.SaveKeyFile(keyPath, result.Key, result.IV, result.Tag); err != nil {
+				return fmt.Errorf("保存AES密钥文件失败: %w", err)
+			}
+		}
+		return nil
 	}
 	return fmt.Errorf("不支持的算法: %s", algo)
 }
