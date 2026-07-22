@@ -1,4 +1,4 @@
-.PHONY: build test clean build-all build-macos build-windows build-linux
+.PHONY: build test clean build-all build-macos build-windows build-linux install-deps-linux
 
 APP_NAME=minicipher
 BUILD_DIR=dist
@@ -49,3 +49,8 @@ fmt:
 # 代码检查
 vet:
 	go vet ./...
+
+# 安装 Linux 系统依赖 (Fyne GUI 构建需要)
+install-deps-linux:
+	sudo apt-get update
+	sudo apt-get install -y libgl1-mesa-dev xorg-dev
