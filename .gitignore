@@ -81,6 +81,9 @@ go-migrate/minicipher
 go-migrate/minicipher-*
 go-migrate/dist/
 
+# Go build outputs (bin directory)
+go-migrate/bin/
+
 # Temporary files
 *.tmp
 *.temp
