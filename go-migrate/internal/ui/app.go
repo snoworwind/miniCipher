@@ -2,6 +2,7 @@ package ui
 
 import (
 	"fmt"
+	"image/color"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -11,6 +12,7 @@ import (
 	"fyne.io/fyne/v2/app"
 	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/dialog"
+	fynetheme "fyne.io/fyne/v2/theme"
 	"fyne.io/fyne/v2/widget"
 
 	"github.com/snoworwind/minicipher/internal/batch"
@@ -84,7 +86,6 @@ func (a *App) Run() {
 
 func (a *App) setupUI() {
 	a.win.SetTitle(a.tr.T("app.title"))
-	a.setupMenu()
 
 	algoBox := a.buildAlgorithmPanel()
 
@@ -104,6 +105,8 @@ func (a *App) setupUI() {
 	)
 
 	a.win.SetContent(content)
+	a.setupMenu()
+	a.applyFyneTheme()
 }
 
 func (a *App) setupMenu() {
@@ -729,6 +732,36 @@ func (a *App) safeRebuildUI() {
 	if a.batchOutputEntry != nil && savedBatchOutput != "" {
 		a.batchOutputEntry.SetText(savedBatchOutput)
 	}
+}
+
+// forcedTheme 强制主题变体（浅色/深色）
+type forcedTheme struct {
+	variant fyne.ThemeVariant
+}
+
+func (f *forcedTheme) Color(name fyne.ThemeColorName, _ fyne.ThemeVariant) color.Color {
+	return fynetheme.DefaultTheme().Color(name, f.variant)
+}
+
+func (f *forcedTheme) Font(style fyne.TextStyle) fyne.Resource {
+	return fynetheme.DefaultTheme().Font(style)
+}
+
+func (f *forcedTheme) Icon(name fyne.ThemeIconName) fyne.Resource {
+	return fynetheme.DefaultTheme().Icon(name)
+}
+
+func (f *forcedTheme) Size(name fyne.ThemeSizeName) float32 {
+	return fynetheme.DefaultTheme().Size(name)
+}
+
+// applyFyneTheme 根据配置应用 Fyne 主题
+func (a *App) applyFyneTheme() {
+	variant := fynetheme.VariantLight
+	if a.cfg.UI.Theme == "dark" {
+		variant = fynetheme.VariantDark
+	}
+	fyne.CurrentApp().Settings().SetTheme(&forcedTheme{variant: variant})
 }
 
 // 保留导入引用
