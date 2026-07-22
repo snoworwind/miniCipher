@@ -30,9 +30,9 @@ func main() {
 
 	switch os.Args[1] {
 	case "encrypt":
-		handleEncrypt(os.Args[2:], cfg, translator)
+		handleEncrypt(os.Args[2:], cfg, translator, cfgMgr)
 	case "decrypt":
-		handleDecrypt(os.Args[2:], cfg, translator)
+		handleDecrypt(os.Args[2:], cfg, translator, cfgMgr)
 	case "test":
 		runTests()
 	case "help", "-h", "--help":
@@ -45,7 +45,7 @@ func main() {
 }
 
 func printUsage(t *lang.Translator) {
-	fmt.Println(`
+	fmt.Print(`
 用法:
   minicipher encrypt <input_file> <output_file> [选项]
   minicipher decrypt <input_file> <output_file> [选项]
@@ -136,7 +136,7 @@ func parseArgs(args []string) map[string]string {
 	return result
 }
 
-func handleEncrypt(args []string, cfg *config.Config, t *lang.Translator) {
+func handleEncrypt(args []string, cfg *config.Config, t *lang.Translator, cfgMgr *config.Manager) {
 	if len(args) < 2 {
 		fmt.Fprintln(os.Stderr, "错误: 需要输入文件路径和输出文件路径")
 		os.Exit(1)
@@ -174,7 +174,7 @@ func handleEncrypt(args []string, cfg *config.Config, t *lang.Translator) {
 		passwordEnv := parsed["--password-env"]
 		if passwordEnv == "" {
 			// auto-detect MINICIPHER_PASSWORD if no explicit env var name
-			if v := os.Getenv("MINICIPHER_PASSWORD"); v != "" && passwordStdin == false {
+			if v := os.Getenv("MINICIPHER_PASSWORD"); v != "" && !passwordStdin {
 				passwordEnv = "MINICIPHER_PASSWORD"
 			}
 		}
@@ -196,16 +196,18 @@ func handleEncrypt(args []string, cfg *config.Config, t *lang.Translator) {
 	fmt.Printf("加密: %s -> %s\n", inputFile, outputFile)
 	fmt.Printf("算法: %s, 密钥类型: %s\n\n", algo, keyTypeStr)
 
+	chunkSize := cfgMgr.GetBufferSizeMB() * 1024 * 1024
+
 	var result *crypto.EncryptionResult
 	var err error
 
 	switch algo {
 	case "OTP":
 		otp := crypto.NewOTPAlgorithm()
-		result, err = otp.EncryptToFile(inputFile, outputFile, 10*1024*1024)
+		result, err = otp.EncryptToFile(inputFile, outputFile, chunkSize)
 	case "AES256":
 		aes := crypto.NewAES256Algorithm()
-		result, err = aes.EncryptToFile(inputFile, outputFile, kt, []byte(password), nil)
+		result, err = aes.EncryptToFile(inputFile, outputFile, kt, []byte(password), nil, chunkSize)
 	default:
 		fmt.Fprintf(os.Stderr, "不支持的算法: %s\n", algo)
 		os.Exit(1)
@@ -222,14 +224,16 @@ func handleEncrypt(args []string, cfg *config.Config, t *lang.Translator) {
 	// 保存密钥（随机密钥模式）
 	if algo == "AES256" && kt == crypto.KeyTypeRandom {
 		keyFile := outputFile + ".key"
-		if err := crypto.SaveKeyFile(keyFile, result.Key, result.IV, result.Tag); err != nil {
+		// 保存 key+iv+tag 完整格式
+		if err := crypto.SaveKeyFileWithIVTag(keyFile, result.Key, result.IV, result.Tag); err != nil {
 			fmt.Fprintf(os.Stderr, "警告: 保存密钥文件失败: %v\n", err)
 		} else {
 			fmt.Printf("密钥文件: %s (请妥善保管！)\n", keyFile)
 		}
 	} else if algo == "OTP" && result.Key != nil {
 		keyFile := outputFile + ".key"
-		if err := os.WriteFile(keyFile, result.Key, 0600); err != nil {
+		// OTP 密钥：保存为纯二进制（与 Python 兼容）
+		if err := crypto.SaveKeyFile(keyFile, result.Key); err != nil {
 			fmt.Fprintf(os.Stderr, "警告: 保存密钥文件失败: %v\n", err)
 		} else {
 			fmt.Printf("密钥文件: %s (请妥善保管！)\n", keyFile)
@@ -237,7 +241,7 @@ func handleEncrypt(args []string, cfg *config.Config, t *lang.Translator) {
 	}
 }
 
-func handleDecrypt(args []string, cfg *config.Config, t *lang.Translator) {
+func handleDecrypt(args []string, cfg *config.Config, t *lang.Translator, cfgMgr *config.Manager) {
 	if len(args) < 2 {
 		fmt.Fprintln(os.Stderr, "错误: 需要加密文件路径和输出文件路径")
 		os.Exit(1)
@@ -254,7 +258,7 @@ func handleDecrypt(args []string, cfg *config.Config, t *lang.Translator) {
 	}
 	passwordEnv := parsed["--password-env"]
 	if passwordEnv == "" {
-		if v := os.Getenv("MINICIPHER_PASSWORD"); v != "" && passwordStdin == false {
+		if v := os.Getenv("MINICIPHER_PASSWORD"); v != "" && !passwordStdin {
 			passwordEnv = "MINICIPHER_PASSWORD"
 		}
 	}
@@ -291,19 +295,22 @@ func handleDecrypt(args []string, cfg *config.Config, t *lang.Translator) {
 	fmt.Printf("解密: %s -> %s\n", inputFile, outputFile)
 	fmt.Printf("检测算法: %s\n\n", algo)
 
+	chunkSize := cfgMgr.GetBufferSizeMB() * 1024 * 1024
+
 	switch algo {
 	case "OTP":
 		if keyFile == "" {
 			fmt.Fprintln(os.Stderr, "错误: OTP解密需要 --key-file=")
 			os.Exit(1)
 		}
-		key, err := os.ReadFile(keyFile)
+		// 使用智能加载（兼容 hex 和二进制格式）
+		key, err := crypto.LoadKey(keyFile)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "读取密钥文件失败: %v\n", err)
 			os.Exit(1)
 		}
 		otp := crypto.NewOTPAlgorithm()
-		_, err = otp.DecryptFromFile(inputFile, outputFile, key, 10*1024*1024)
+		_, err = otp.DecryptFromFile(inputFile, outputFile, key, chunkSize)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "解密失败: %v\n", err)
 			os.Exit(1)
@@ -313,15 +320,22 @@ func handleDecrypt(args []string, cfg *config.Config, t *lang.Translator) {
 		aes := crypto.NewAES256Algorithm()
 		if password != "" {
 			_, err = aes.DecryptFromFile(inputFile, outputFile,
-				crypto.KeyTypePassword, nil, nil, nil, []byte(password), nil)
+				crypto.KeyTypePassword, nil, nil, nil, []byte(password), nil, chunkSize)
 		} else if keyFile != "" {
-			key, iv, tag, e := crypto.LoadKeyFile(keyFile)
+			// 智能加载 AES 密钥（兼容完整格式和纯key格式）
+			key, iv, tag, e := crypto.LoadKeyWithIVTag(keyFile)
 			if e != nil {
-				fmt.Fprintf(os.Stderr, "读取密钥文件失败: %v\n", e)
-				os.Exit(1)
+				// 回退到纯key格式
+				key, err = crypto.LoadKey(keyFile)
+				if err != nil {
+					fmt.Fprintf(os.Stderr, "读取密钥文件失败: %v\n", err)
+					os.Exit(1)
+				}
+				iv = nil
+				tag = nil
 			}
 			_, err = aes.DecryptFromFile(inputFile, outputFile,
-				crypto.KeyTypeRandom, key, iv, tag, nil, nil)
+				crypto.KeyTypeRandom, key, iv, tag, nil, nil, chunkSize)
 		} else {
 			fmt.Fprintln(os.Stderr, "错误: 需要 --key-file= 或提供密码 (--password-stdin / --password-env)")
 			os.Exit(1)
@@ -406,7 +420,7 @@ func runTests() {
 	os.WriteFile(testFilePath, testContent, 0644)
 
 	encFilePath := filepath.Join(tmpDir, "test.txt.enc")
-	fileResult, err := aes.EncryptToFile(testFilePath, encFilePath, crypto.KeyTypeRandom, nil, nil)
+	fileResult, err := aes.EncryptToFile(testFilePath, encFilePath, crypto.KeyTypeRandom, nil, nil, 10*1024*1024)
 	if err != nil {
 		fmt.Printf("❌ 文件加密失败: %v\n", err)
 		return
@@ -414,7 +428,7 @@ func runTests() {
 
 	decFilePath := filepath.Join(tmpDir, "test_decrypted.txt")
 	_, err = aes.DecryptFromFile(encFilePath, decFilePath,
-		crypto.KeyTypeRandom, fileResult.Key, fileResult.IV, fileResult.Tag, nil, nil)
+		crypto.KeyTypeRandom, fileResult.Key, fileResult.IV, fileResult.Tag, nil, nil, 10*1024*1024)
 	if err != nil {
 		fmt.Printf("❌ 文件解密失败: %v\n", err)
 		return
@@ -427,13 +441,13 @@ func runTests() {
 		fmt.Println("❌ 文件加解密: 数据不匹配")
 	}
 
-	// 密钥文件保存/加载
+	// 密钥文件保存/加载 (新的 API)
 	keyFilePath := filepath.Join(tmpDir, "test.key")
-	if err := crypto.SaveKeyFile(keyFilePath, fileResult.Key, fileResult.IV, fileResult.Tag); err != nil {
+	if err := crypto.SaveKeyFileWithIVTag(keyFilePath, fileResult.Key, fileResult.IV, fileResult.Tag); err != nil {
 		fmt.Printf("❌ 保存密钥文件失败: %v\n", err)
 		return
 	}
-	k2, iv2, tag2, err := crypto.LoadKeyFile(keyFilePath)
+	k2, iv2, tag2, err := crypto.LoadKeyWithIVTag(keyFilePath)
 	if err != nil {
 		fmt.Printf("❌ 加载密钥文件失败: %v\n", err)
 		return
@@ -442,6 +456,19 @@ func runTests() {
 		fmt.Println("✅ 密钥文件保存/加载: 通过")
 	} else {
 		fmt.Println("❌ 密钥文件保存/加载: 格式错误")
+	}
+
+	// 测试智能加载密钥 (LoadKey)
+	keyOnlyPath := filepath.Join(tmpDir, "test_key_only.key")
+	if err := crypto.SaveKeyFile(keyOnlyPath, fileResult.Key); err != nil {
+		fmt.Printf("❌ 保存纯key文件失败: %v\n", err)
+	} else {
+		k3, err := crypto.LoadKey(keyOnlyPath)
+		if err != nil || len(k3) != 32 {
+			fmt.Printf("❌ 加载纯key文件失败: %v\n", err)
+		} else {
+			fmt.Println("✅ 纯key加载: 通过")
+		}
 	}
 
 	fmt.Println("\n所有测试完成!")

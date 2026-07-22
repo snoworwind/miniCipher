@@ -7,6 +7,7 @@ import (
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/dialog"
+	"fyne.io/fyne/v2/layout"
 	"fyne.io/fyne/v2/widget"
 
 	"github.com/snoworwind/minicipher/internal/config"
@@ -22,18 +23,22 @@ type SettingsDialog struct {
 	original *config.Config // 原始设置快照
 
 	// UI 组件
-	langSelect     *widget.Select
-	themeSelect    *widget.Select
-	algoSelect     *widget.Select
-	keyTypeSelect  *widget.Select
-	passMinEntry   *widget.Entry
-	strongCheck    *widget.Check
-	inputDirEntry  *widget.Entry
-	outputDirEntry *widget.Entry
-	rememberCheck  *widget.Check
-	debugCheck     *widget.Check
-	logLevelSelect *widget.Select
-	applyBtn       *widget.Button
+	langSelect       *widget.Select
+	themeSelect      *widget.Select
+	algoSelect       *widget.Select
+	keyTypeSelect    *widget.Select
+	passMinEntry     *widget.Entry
+	strongCheck      *widget.Check
+	otpFormatSelect  *widget.Select
+	bufferSizeEntry  *widget.Entry
+	parallelCheck    *widget.Check
+	maxThreadsEntry  *widget.Entry
+	inputDirEntry    *widget.Entry
+	outputDirEntry   *widget.Entry
+	rememberCheck    *widget.Check
+	debugCheck       *widget.Check
+	logLevelSelect   *widget.Select
+	applyBtn         *widget.Button
 }
 
 // NewSettingsDialog 创建设置对话框
@@ -54,7 +59,7 @@ func NewSettingsDialog(a *App) *SettingsDialog {
 
 	sd.win = fyne.CurrentApp().NewWindow(a.tr.T("settings"))
 	sd.setupUI()
-	sd.win.Resize(fyne.NewSize(620, 520))
+	sd.win.Resize(fyne.NewSize(660, 560))
 
 	return sd
 }
@@ -114,11 +119,32 @@ func (sd *SettingsDialog) buildGeneralTab() fyne.CanvasObject {
 	sd.keyTypeSelect = widget.NewSelect([]string{"random", "password"}, nil)
 	sd.keyTypeSelect.SetSelected(cfg.Crypto.DefaultKeyType)
 
+	// 并行处理设置
+	sd.parallelCheck = widget.NewCheck(tr.T("settings.enable_parallel"), nil)
+	sd.parallelCheck.SetChecked(cfg.Batch.ParallelProcessing)
+
+	sd.maxThreadsEntry = widget.NewEntry()
+	sd.maxThreadsEntry.SetText(strconv.Itoa(cfg.Batch.MaxThreads))
+	sd.maxThreadsEntry.Disable()
+	if cfg.Batch.ParallelProcessing {
+		sd.maxThreadsEntry.Enable()
+	}
+
+	sd.parallelCheck.OnChanged = func(checked bool) {
+		if checked {
+			sd.maxThreadsEntry.Enable()
+		} else {
+			sd.maxThreadsEntry.Disable()
+		}
+	}
+
 	form := widget.NewForm(
 		&widget.FormItem{Text: tr.T("settings.ui_language"), Widget: sd.langSelect},
 		&widget.FormItem{Text: tr.T("settings.ui_theme"), Widget: sd.themeSelect},
 		&widget.FormItem{Text: tr.T("settings.default_algorithm"), Widget: sd.algoSelect},
 		&widget.FormItem{Text: tr.T("settings.default_key_type"), Widget: sd.keyTypeSelect},
+		&widget.FormItem{Text: "", Widget: sd.parallelCheck},
+		&widget.FormItem{Text: tr.T("settings.max_threads"), Widget: sd.maxThreadsEntry},
 	)
 
 	return container.NewVBox(
@@ -137,15 +163,28 @@ func (sd *SettingsDialog) buildCryptoTab() fyne.CanvasObject {
 	sd.strongCheck = widget.NewCheck(tr.T("settings.require_strong_password"), nil)
 	sd.strongCheck.SetChecked(cfg.Crypto.RequireStrongPass)
 
+	// OTP 密钥格式
+	sd.otpFormatSelect = widget.NewSelect(
+		[]string{tr.T("settings.otp_hex"), tr.T("settings.otp_binary")},
+		nil,
+	)
+	if cfg.Crypto.OTPKeyFormat == "binary" {
+		sd.otpFormatSelect.SetSelected(tr.T("settings.otp_binary"))
+	} else {
+		sd.otpFormatSelect.SetSelected(tr.T("settings.otp_hex"))
+	}
+
 	form := widget.NewForm(
 		&widget.FormItem{Text: tr.T("settings.password_min_length"), Widget: sd.passMinEntry},
 		&widget.FormItem{Text: "", Widget: sd.strongCheck},
+		&widget.FormItem{Text: tr.T("settings.otp_key_format"), Widget: sd.otpFormatSelect},
 	)
 
 	return container.NewVBox(
 		widget.NewLabelWithStyle(tr.T("tab.encryption"), fyne.TextAlignLeading, fyne.TextStyle{Bold: true}),
 		form,
 		widget.NewLabel(tr.T("settings.password_info")),
+		widget.NewLabel(tr.T("settings.otp_format_info")),
 	)
 }
 
@@ -202,15 +241,21 @@ func (sd *SettingsDialog) buildAdvancedTab() fyne.CanvasObject {
 	sd.logLevelSelect = widget.NewSelect([]string{"DEBUG", "INFO", "WARNING", "ERROR"}, nil)
 	sd.logLevelSelect.SetSelected("INFO")
 
+	// 缓冲区大小
+	sd.bufferSizeEntry = widget.NewEntry()
+	sd.bufferSizeEntry.SetText(strconv.Itoa(cfg.Advanced.BufferSize))
+
 	form := widget.NewForm(
 		&widget.FormItem{Text: "", Widget: sd.debugCheck},
 		&widget.FormItem{Text: tr.T("settings.log_level"), Widget: sd.logLevelSelect},
+		&widget.FormItem{Text: tr.T("settings.buffer_size"), Widget: sd.bufferSizeEntry},
 	)
 
 	return container.NewVBox(
 		widget.NewLabelWithStyle(tr.T("tab.advanced"), fyne.TextAlignLeading, fyne.TextStyle{Bold: true}),
 		form,
 		widget.NewLabel(tr.T("settings.advanced_info")),
+		layout.NewSpacer(),
 	)
 }
 
@@ -240,6 +285,12 @@ func (sd *SettingsDialog) collectValues() *config.Config {
 		newCfg.Crypto.PasswordMinLength = sd.original.Crypto.PasswordMinLength
 	}
 	newCfg.Crypto.RequireStrongPass = sd.strongCheck.Checked
+	// OTP 密钥格式
+	if sd.otpFormatSelect.Selected == sd.app.tr.T("settings.otp_binary") {
+		newCfg.Crypto.OTPKeyFormat = "binary"
+	} else {
+		newCfg.Crypto.OTPKeyFormat = "hex"
+	}
 	// Paths
 	newCfg.Paths.DefaultInputDir = sd.inputDirEntry.Text
 	newCfg.Paths.DefaultOutputDir = sd.outputDirEntry.Text
@@ -248,6 +299,20 @@ func (sd *SettingsDialog) collectValues() *config.Config {
 	newCfg.Paths.LastOutputFolder = sd.cfg.Paths.LastOutputFolder
 	// Batch
 	newCfg.Batch = sd.cfg.Batch
+	newCfg.Batch.ParallelProcessing = sd.parallelCheck.Checked
+	if v, err := strconv.Atoi(sd.maxThreadsEntry.Text); err == nil && v >= 1 && v <= 16 {
+		newCfg.Batch.MaxThreads = v
+	} else {
+		newCfg.Batch.MaxThreads = sd.original.Batch.MaxThreads
+	}
+	newCfg.Batch.PreserveStructure = sd.cfg.Batch.PreserveStructure
+	// Advanced
+	newCfg.Advanced = sd.cfg.Advanced
+	if v, err := strconv.Atoi(sd.bufferSizeEntry.Text); err == nil && v >= 1 && v <= 100 {
+		newCfg.Advanced.BufferSize = v
+	} else {
+		newCfg.Advanced.BufferSize = sd.original.Advanced.BufferSize
+	}
 	// Debug
 	newCfg.Debug = sd.debugCheck.Checked
 
@@ -264,6 +329,8 @@ func (sd *SettingsDialog) onApply() {
 	sd.cfgMgr.Get().UI = newCfg.UI
 	sd.cfgMgr.Get().Crypto = newCfg.Crypto
 	sd.cfgMgr.Get().Paths = newCfg.Paths
+	sd.cfgMgr.Get().Batch = newCfg.Batch
+	sd.cfgMgr.Get().Advanced = newCfg.Advanced
 	sd.cfgMgr.Get().Debug = newCfg.Debug
 
 	if err := sd.cfgMgr.Save(); err != nil {
@@ -276,12 +343,49 @@ func (sd *SettingsDialog) onApply() {
 		if langChanged {
 			sd.app.tr.SetLanguage(newCfg.UI.Language)
 		}
-		dialog.ShowInformation(sd.app.tr.T("success"),
-			sd.app.tr.T("settings.success_restart"), sd.win)
+		// 显示带重启提示的对话框
+		sd.showRestartPrompt(langChanged, themeChanged)
 	} else {
 		dialog.ShowInformation(sd.app.tr.T("success"),
 			sd.app.tr.T("settings.success"), sd.win)
 	}
+}
+
+// showRestartPrompt 显示重启提示对话框（与 Python 的 _show_restart_prompt 一致）
+func (sd *SettingsDialog) showRestartPrompt(langChanged, themeChanged bool) {
+	tr := sd.app.tr
+
+	// 构建变更说明
+	changes := ""
+	if langChanged {
+		changes += "• " + tr.T("settings.ui_language") + "\n"
+	}
+	if themeChanged {
+		changes += "• " + tr.T("settings.ui_theme") + "\n"
+	}
+
+	message := tr.T("settings.success_restart") + "\n\n" +
+		"已更改的设置：\n" + changes + "\n" +
+		"点击\"立即重启\"关闭设置窗口并刷新界面。"
+
+	restartBtn := widget.NewButton("立即重启", func() {
+		sd.win.Close()
+		// 通知主界面重启UI（通过重新创建界面）
+		if sd.app != nil {
+			sd.app.setupUI()
+		}
+	})
+
+	laterBtn := widget.NewButton("稍后重启", func() {
+		// 什么都不做
+	})
+
+	content := container.NewVBox(
+		widget.NewLabel(message),
+		container.NewHBox(laterBtn, restartBtn),
+	)
+
+	dialog.ShowCustom("需要重启界面", "关闭", content, sd.win)
 }
 
 func (sd *SettingsDialog) onOK() {
@@ -290,8 +394,14 @@ func (sd *SettingsDialog) onOK() {
 }
 
 func (sd *SettingsDialog) onCancel() {
-	// 恢复原始设置
-	sd.cfg = sd.original
+	// 恢复原始设置到 cfgMgr
+	sd.cfgMgr.Get().UI = sd.original.UI
+	sd.cfgMgr.Get().Crypto = sd.original.Crypto
+	sd.cfgMgr.Get().Paths = sd.original.Paths
+	sd.cfgMgr.Get().Batch = sd.original.Batch
+	sd.cfgMgr.Get().Advanced = sd.original.Advanced
+	sd.cfgMgr.Get().Debug = sd.original.Debug
+	sd.cfgMgr.Save()
 	sd.win.Close()
 }
 
@@ -301,6 +411,8 @@ func (sd *SettingsDialog) onReset() {
 	sd.cfgMgr.Get().UI = defaultCfg.UI
 	sd.cfgMgr.Get().Crypto = defaultCfg.Crypto
 	sd.cfgMgr.Get().Paths = defaultCfg.Paths
+	sd.cfgMgr.Get().Batch = defaultCfg.Batch
+	sd.cfgMgr.Get().Advanced = defaultCfg.Advanced
 	sd.cfgMgr.Get().Debug = defaultCfg.Debug
 
 	// 更新 UI
@@ -310,6 +422,11 @@ func (sd *SettingsDialog) onReset() {
 	sd.keyTypeSelect.SetSelected("random")
 	sd.passMinEntry.SetText("8")
 	sd.strongCheck.SetChecked(true)
+	sd.otpFormatSelect.SetSelected(sd.app.tr.T("settings.otp_hex"))
+	sd.bufferSizeEntry.SetText("10")
+	sd.parallelCheck.SetChecked(false)
+	sd.maxThreadsEntry.SetText("4")
+	sd.maxThreadsEntry.Disable()
 	sd.inputDirEntry.SetText("")
 	sd.outputDirEntry.SetText("")
 	sd.rememberCheck.SetChecked(true)

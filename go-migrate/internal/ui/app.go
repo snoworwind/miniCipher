@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strconv"
 	"time"
 
 	"fyne.io/fyne/v2"
@@ -43,12 +44,15 @@ type App struct {
 	decStatusLabel  *widget.Label
 
 	// 批量面板
-	batchInputEntry  *widget.Entry
-	batchOutputEntry *widget.Entry
-	batchStatusLabel *widget.Label
-	batchProgress    *widget.ProgressBar
-	batchCancelBtn   *widget.Button
-	batchProcessor   *batch.BatchProcessor
+	batchInputEntry     *widget.Entry
+	batchOutputEntry    *widget.Entry
+	batchStatusLabel    *widget.Label
+	batchProgress       *widget.ProgressBar
+	batchCancelBtn      *widget.Button
+	batchPreserveCheck  *widget.Check
+	batchParallelCheck  *widget.Check
+	batchMaxThreadsEntry *widget.Entry
+	batchProcessor      *batch.BatchProcessor
 }
 
 // NewApp 创建GUI应用
@@ -70,7 +74,7 @@ func (a *App) Run() {
 	}
 	a.tr = lang.NewTranslator(a.cfg.UI.Language)
 
-	a.batchProcessor = batch.New(a.cfg.Batch.MaxThreads, 10)
+	a.batchProcessor = batch.New(a.cfg.Batch.MaxThreads, a.cfgMgr.GetBufferSizeMB())
 	a.batchProcessor.SetProgressCallback(a.onBatchProgress)
 
 	a.setupUI()
@@ -115,23 +119,49 @@ func (a *App) setupMenu() {
 			a.tr.SetLanguage("zh_CN")
 			a.cfg.UI.Language = "zh_CN"
 			a.cfgMgr.Save()
-			a.win.SetTitle(a.tr.T("app.title"))
+			a.setupUI()
 		}),
 		fyne.NewMenuItem("English", func() {
 			a.tr.SetLanguage("en_US")
 			a.cfg.UI.Language = "en_US"
 			a.cfgMgr.Save()
-			a.win.SetTitle(a.tr.T("app.title"))
+			a.setupUI()
+		}),
+	)
+
+	themeMenu := fyne.NewMenu(a.tr.T("theme_menu"),
+		fyne.NewMenuItem(a.tr.T("theme.light"), func() {
+			a.cfg.UI.Theme = "light"
+			a.cfgMgr.Save()
+		}),
+		fyne.NewMenuItem(a.tr.T("theme.dark"), func() {
+			a.cfg.UI.Theme = "dark"
+			a.cfgMgr.Save()
 		}),
 	)
 
 	helpMenu := fyne.NewMenu(a.tr.T("help_menu"),
 		fyne.NewMenuItem(a.tr.T("about"), func() {
-			dialog.ShowInformation(a.tr.T("about"), "MiniCipher v2.0\nGo Implementation\nMIT License\n\nFile encryption tool supporting OTP and AES256-GCM.", a.win)
+			langDisplay := a.cfg.UI.Language
+			if langDisplay == "zh_CN" {
+				langDisplay = "简体中文"
+			} else {
+				langDisplay = "English"
+			}
+			aboutText := fmt.Sprintf(
+				"MiniCipher v%s\n\n"+
+					"支持算法: OTP, AES256-GCM\n"+
+					"语言: %s\n"+
+					"主题: %s\n\n"+
+					"© 2026 miniCipher Project\n"+
+					"MIT License",
+				a.cfg.Version, langDisplay, a.cfg.UI.Theme,
+			)
+			dialog.ShowInformation(a.tr.T("about"), aboutText, a.win)
 		}),
 	)
 
-	a.win.SetMainMenu(fyne.NewMainMenu(fileMenu, langMenu, helpMenu))
+	a.win.SetMainMenu(fyne.NewMainMenu(fileMenu, langMenu, themeMenu, helpMenu))
 }
 
 func (a *App) openSettings() {
@@ -217,7 +247,13 @@ func (a *App) buildAlgorithmPanel() *fyne.Container {
 func (a *App) browseFile(entry *widget.Entry) {
 	dialog.ShowFileOpen(func(r fyne.URIReadCloser, err error) {
 		if r != nil {
-			entry.SetText(r.URI().Path())
+			path := r.URI().Path()
+			entry.SetText(path)
+			// 保存最后使用的文件夹（与 Python 一致）
+			if a.cfg.Paths.RememberLastFolder {
+				a.cfg.Paths.LastInputFolder = filepath.Dir(path)
+				a.cfgMgr.Save()
+			}
 		}
 	}, a.win)
 }
@@ -225,7 +261,13 @@ func (a *App) browseFile(entry *widget.Entry) {
 func (a *App) browseDir(entry *widget.Entry) {
 	dialog.ShowFolderOpen(func(u fyne.ListableURI, err error) {
 		if u != nil {
-			entry.SetText(u.Path())
+			path := u.Path()
+			entry.SetText(path)
+			// 保存最后使用的文件夹（与 Python 一致）
+			if a.cfg.Paths.RememberLastFolder {
+				a.cfg.Paths.LastOutputFolder = path
+				a.cfgMgr.Save()
+			}
 		}
 	}, a.win)
 }
@@ -264,7 +306,7 @@ func (a *App) buildEncryptPanel() fyne.CanvasObject {
 func (a *App) doEncrypt() {
 	inputFile := a.encInputEntry.Text
 	if inputFile == "" {
-		dialog.ShowError(fmt.Errorf(a.tr.T("error.invalid_file")), a.win)
+		dialog.ShowError(fmt.Errorf("%s", a.tr.T("error.invalid_file")), a.win)
 		return
 	}
 
@@ -286,7 +328,7 @@ func (a *App) doEncrypt() {
 	}
 
 	if kt == crypto.KeyTypePassword && password == "" {
-		dialog.ShowError(fmt.Errorf(a.tr.T("error.no_password")), a.win)
+		dialog.ShowError(fmt.Errorf("%s", a.tr.T("error.no_password")), a.win)
 		return
 	}
 
@@ -295,7 +337,8 @@ func (a *App) doEncrypt() {
 	go func() {
 		defer a.win.Canvas().Refresh(a.encStatusLabel)
 
-		fc := crypto.NewFileCipher(10,
+		bufSize := a.cfgMgr.GetBufferSizeMB()
+		fc := crypto.NewFileCipher(bufSize,
 			a.cfg.Crypto.PasswordMinLength,
 			a.cfg.Crypto.RequireStrongPass)
 
@@ -315,17 +358,30 @@ func (a *App) doEncrypt() {
 		})
 
 		if err != nil {
-			a.encStatusLabel.SetText("❌ 加密失败，请检查输入文件")
+			a.encStatusLabel.SetText(fmt.Sprintf("❌ %s", err.Error()))
 			return
 		}
 
 		if resp.KeyFileNeeded {
-			keyFile, err := fc.SaveAESKeyAll(resp.Key, resp.IV, resp.Tag, outputDir, filepath.Base(inputFile))
-			if err != nil {
-				a.encStatusLabel.SetText(fmt.Sprintf(a.tr.T("key_save_failed"), err))
-				return
+			baseName := filepath.Base(inputFile)
+			// 保存密钥（与 Python 兼容格式）
+			if algoType == crypto.AlgorithmOTP {
+				format := "hex" // 默认 hex
+				keyFile, err := fc.SaveKey(resp.Key, outputDir, baseName, algoType, kt, format)
+				if err != nil {
+					a.encStatusLabel.SetText(fmt.Sprintf(a.tr.T("key_save_failed"), err))
+					return
+				}
+				a.encStatusLabel.SetText(fmt.Sprintf(a.tr.T("success.encryption_with_key"), keyFile))
+			} else {
+				// AES: 保存 key+iv+tag 完整格式
+				keyFile, err := fc.SaveAESKeyAll(resp.Key, resp.IV, resp.Tag, outputDir, baseName)
+				if err != nil {
+					a.encStatusLabel.SetText(fmt.Sprintf(a.tr.T("key_save_failed"), err))
+					return
+				}
+				a.encStatusLabel.SetText(fmt.Sprintf(a.tr.T("success.encryption_with_key"), keyFile))
 			}
-			a.encStatusLabel.SetText(fmt.Sprintf(a.tr.T("success.encryption_with_key"), keyFile))
 		} else {
 			a.encStatusLabel.SetText(fmt.Sprintf(a.tr.T("success.encryption"), algo, outputFile))
 		}
@@ -378,7 +434,7 @@ func (a *App) buildDecryptPanel() fyne.CanvasObject {
 func (a *App) doDecrypt() {
 	inputFile := a.decInputEntry.Text
 	if inputFile == "" {
-		dialog.ShowError(fmt.Errorf(a.tr.T("error.invalid_file")), a.win)
+		dialog.ShowError(fmt.Errorf("%s", a.tr.T("error.invalid_file")), a.win)
 		return
 	}
 
@@ -402,7 +458,8 @@ func (a *App) doDecrypt() {
 	go func() {
 		defer a.win.Canvas().Refresh(a.decStatusLabel)
 
-		fc := crypto.NewFileCipher(10,
+		bufSize := a.cfgMgr.GetBufferSizeMB()
+		fc := crypto.NewFileCipher(bufSize,
 			a.cfg.Crypto.PasswordMinLength,
 			a.cfg.Crypto.RequireStrongPass)
 
@@ -420,7 +477,7 @@ func (a *App) doDecrypt() {
 
 		_, err := fc.DecryptFile(req)
 		if err != nil {
-			a.decStatusLabel.SetText("❌ 解密失败，请检查密钥/密码是否正确")
+			a.decStatusLabel.SetText(fmt.Sprintf("❌ %s", err.Error()))
 			return
 		}
 		a.decStatusLabel.SetText(fmt.Sprintf(a.tr.T("success.decryption"), "", outputFile))
@@ -452,6 +509,28 @@ func (a *App) buildBatchPanel() fyne.CanvasObject {
 	})
 	a.batchCancelBtn.Disable()
 
+	// 保持目录结构选项
+	a.batchPreserveCheck = widget.NewCheck(a.tr.T("batch.preserve_structure"), nil)
+	a.batchPreserveCheck.SetChecked(a.cfg.Batch.PreserveStructure)
+
+	// 并行处理选项
+	a.batchParallelCheck = widget.NewCheck(a.tr.T("batch.enable_parallel"), nil)
+	a.batchParallelCheck.SetChecked(a.cfg.Batch.ParallelProcessing)
+
+	a.batchMaxThreadsEntry = widget.NewEntry()
+	a.batchMaxThreadsEntry.SetText(strconv.Itoa(a.cfg.Batch.MaxThreads))
+	a.batchMaxThreadsEntry.Disable()
+	if a.cfg.Batch.ParallelProcessing {
+		a.batchMaxThreadsEntry.Enable()
+	}
+	a.batchParallelCheck.OnChanged = func(checked bool) {
+		if checked {
+			a.batchMaxThreadsEntry.Enable()
+		} else {
+			a.batchMaxThreadsEntry.Disable()
+		}
+	}
+
 	return container.NewVBox(
 		widget.NewLabel(a.tr.T("batch.title")),
 		container.NewBorder(nil, nil,
@@ -463,6 +542,13 @@ func (a *App) buildBatchPanel() fyne.CanvasObject {
 			widget.NewButton(a.tr.T("browse"), func() { a.browseDir(a.batchOutputEntry) }),
 			nil,
 			a.batchOutputEntry,
+		),
+		a.batchPreserveCheck,
+		a.batchParallelCheck,
+		container.NewBorder(nil, nil,
+			widget.NewLabel(a.tr.T("batch.max_threads")),
+			nil,
+			a.batchMaxThreadsEntry,
 		),
 		container.NewHBox(doBatchEncrypt, doBatchDecrypt, a.batchCancelBtn),
 		a.batchProgress,
@@ -491,7 +577,7 @@ func (a *App) doBatch(isEncrypt bool) {
 	}
 
 	if kt == crypto.KeyTypePassword && password == "" {
-		dialog.ShowError(fmt.Errorf(a.tr.T("error.no_password")), a.win)
+		dialog.ShowError(fmt.Errorf("%s", a.tr.T("error.no_password")), a.win)
 		return
 	}
 
@@ -505,16 +591,27 @@ func (a *App) doBatch(isEncrypt bool) {
 
 	paths := []string{inputDir}
 
+	// 从UI获取批量处理选项
+	preserveStruct := a.batchPreserveCheck.Checked
+	maxThreads := 1 // 默认串行
+	if a.batchParallelCheck.Checked {
+		if n, err := strconv.Atoi(a.batchMaxThreadsEntry.Text); err == nil && n >= 1 && n <= 16 {
+			maxThreads = n
+		} else {
+			maxThreads = a.cfg.Batch.MaxThreads
+		}
+	}
+
 	go func() {
 		defer a.batchCancelBtn.Disable()
 
-		bp := batch.New(a.cfg.Batch.MaxThreads, 10)
-		bp.SetProgressCallback(a.onBatchProgress)
+		a.batchProcessor = batch.New(maxThreads, a.cfgMgr.GetBufferSizeMB())
+		a.batchProcessor.SetProgressCallback(a.onBatchProgress)
 
-		result, err := bp.Process(op, paths, outputDir, a.cfg.Batch.PreserveStructure,
+		result, err := a.batchProcessor.Process(op, batch.ModeFolderRecursive, paths, outputDir, preserveStruct,
 			algo, kt, nil, []byte(password), nil, nil, nil)
 		if err != nil {
-			a.batchStatusLabel.SetText("❌ 批量处理失败，请检查输入和输出路径")
+			a.batchStatusLabel.SetText(fmt.Sprintf("❌ %s", err.Error()))
 			return
 		}
 

@@ -16,6 +16,7 @@ type Config struct {
 	Paths   PathsConfig    `json:"paths"`
 	Batch   BatchConfig    `json:"batch"`
 	Debug   bool           `json:"debug"`
+	Advanced AdvancedConfig `json:"advanced"`
 }
 
 // UIConfig 界面配置
@@ -24,12 +25,18 @@ type UIConfig struct {
 	Theme    string `json:"theme"`    // "light" or "dark"
 }
 
+// AdvancedConfig 高级配置
+type AdvancedConfig struct {
+	BufferSize int `json:"buffer_size"` // MB - 缓冲区大小
+}
+
 // CryptoConfig 加密配置
 type CryptoConfig struct {
 	DefaultAlgorithm    string `json:"default_algorithm"`    // "OTP" or "AES256"
 	DefaultKeyType      string `json:"default_key_type"`     // "random" or "password"
 	PasswordMinLength   int    `json:"password_min_length"`
 	RequireStrongPass   bool   `json:"require_strong_password"`
+	OTPKeyFormat        string `json:"otp_key_format"`       // "hex" or "binary"
 }
 
 // PathsConfig 路径配置
@@ -61,6 +68,7 @@ func DefaultConfig() *Config {
 			DefaultKeyType:    "random",
 			PasswordMinLength: 8,
 			RequireStrongPass: true,
+			OTPKeyFormat:      "hex",
 		},
 		Paths: PathsConfig{
 			RememberLastFolder: true,
@@ -71,6 +79,9 @@ func DefaultConfig() *Config {
 			PreserveStructure:  true,
 		},
 		Debug: false,
+		Advanced: AdvancedConfig{
+			BufferSize: 10,
+		},
 	}
 }
 
@@ -166,7 +177,22 @@ func (m *Manager) GetDefaultKeyType() string {
 
 // GetBufferSizeMB 获取缓冲区大小（MB）
 func (m *Manager) GetBufferSizeMB() int {
+	if m.config != nil && m.config.Advanced.BufferSize > 0 {
+		return m.config.Advanced.BufferSize
+	}
 	return 10 // 默认10MB
+}
+
+// SetBufferSizeMB 设置缓冲区大小（MB）
+func (m *Manager) SetBufferSizeMB(size int) error {
+	if m.config == nil {
+		return fmt.Errorf("配置未加载")
+	}
+	if size < 1 || size > 100 {
+		return fmt.Errorf("缓冲区大小必须在 1-100 MB 之间")
+	}
+	m.config.Advanced.BufferSize = size
+	return m.Save()
 }
 
 // GetLanguage 获取当前语言
