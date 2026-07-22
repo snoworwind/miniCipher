@@ -34,6 +34,7 @@ jobs:
 
     defaults:
       run:
+        shell: bash
         working-directory: go-migrate
 
     steps:
