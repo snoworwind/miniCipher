@@ -44,15 +44,16 @@ type App struct {
 	decStatusLabel  *widget.Label
 
 	// 批量面板
-	batchInputEntry     *widget.Entry
-	batchOutputEntry    *widget.Entry
-	batchStatusLabel    *widget.Label
-	batchProgress       *widget.ProgressBar
-	batchCancelBtn      *widget.Button
-	batchPreserveCheck  *widget.Check
-	batchParallelCheck  *widget.Check
+	batchInputEntry      *widget.Entry
+	batchOutputEntry     *widget.Entry
+	batchStatusLabel     *widget.Label
+	batchProgress        *widget.ProgressBar
+	batchCancelBtn       *widget.Button
+	batchPreserveCheck   *widget.Check
+	batchParallelCheck   *widget.Check
 	batchMaxThreadsEntry *widget.Entry
-	batchProcessor      *batch.BatchProcessor
+	batchModeSelect      *widget.Select
+	batchProcessor       *batch.BatchProcessor
 }
 
 // NewApp 创建GUI应用
@@ -119,13 +120,13 @@ func (a *App) setupMenu() {
 			a.tr.SetLanguage("zh_CN")
 			a.cfg.UI.Language = "zh_CN"
 			a.cfgMgr.Save()
-			a.setupUI()
+			a.safeRebuildUI()
 		}),
 		fyne.NewMenuItem("English", func() {
 			a.tr.SetLanguage("en_US")
 			a.cfg.UI.Language = "en_US"
 			a.cfgMgr.Save()
-			a.setupUI()
+			a.safeRebuildUI()
 		}),
 	)
 
@@ -133,10 +134,12 @@ func (a *App) setupMenu() {
 		fyne.NewMenuItem(a.tr.T("theme.light"), func() {
 			a.cfg.UI.Theme = "light"
 			a.cfgMgr.Save()
+			a.safeRebuildUI()
 		}),
 		fyne.NewMenuItem(a.tr.T("theme.dark"), func() {
 			a.cfg.UI.Theme = "dark"
 			a.cfgMgr.Save()
+			a.safeRebuildUI()
 		}),
 	)
 
@@ -366,7 +369,10 @@ func (a *App) doEncrypt() {
 			baseName := filepath.Base(inputFile)
 			// 保存密钥（与 Python 兼容格式）
 			if algoType == crypto.AlgorithmOTP {
-				format := "hex" // 默认 hex
+				format := a.cfg.Crypto.OTPKeyFormat
+				if format == "" {
+					format = "hex"
+				}
 				keyFile, err := fc.SaveKey(resp.Key, outputDir, baseName, algoType, kt, format)
 				if err != nil {
 					a.encStatusLabel.SetText(fmt.Sprintf(a.tr.T("key_save_failed"), err))
@@ -509,6 +515,14 @@ func (a *App) buildBatchPanel() fyne.CanvasObject {
 	})
 	a.batchCancelBtn.Disable()
 
+	// 处理模式选择器（与 Python 的 batch_mode_combo 一致）
+	a.batchModeSelect = widget.NewSelect([]string{
+		a.tr.T("batch.mode.files"),
+		a.tr.T("batch.mode.folder"),
+		a.tr.T("batch.mode.recursive"),
+	}, nil)
+	a.batchModeSelect.SetSelected(a.tr.T("batch.mode.recursive")) // 默认递归
+
 	// 保持目录结构选项
 	a.batchPreserveCheck = widget.NewCheck(a.tr.T("batch.preserve_structure"), nil)
 	a.batchPreserveCheck.SetChecked(a.cfg.Batch.PreserveStructure)
@@ -533,6 +547,11 @@ func (a *App) buildBatchPanel() fyne.CanvasObject {
 
 	return container.NewVBox(
 		widget.NewLabel(a.tr.T("batch.title")),
+		container.NewBorder(nil, nil,
+			widget.NewLabel(a.tr.T("batch.mode")),
+			nil,
+			a.batchModeSelect,
+		),
 		container.NewBorder(nil, nil,
 			widget.NewButton(a.tr.T("browse"), func() { a.browseDir(a.batchInputEntry) }),
 			nil,
@@ -561,7 +580,7 @@ func (a *App) doBatch(isEncrypt bool) {
 	outputDir := a.batchOutputEntry.Text
 
 	if inputDir == "" || outputDir == "" {
-		dialog.ShowError(fmt.Errorf("请选择输入和输出目录"), a.win)
+		dialog.ShowError(fmt.Errorf("%s", a.tr.T("error.need_both_dirs")), a.win)
 		return
 	}
 
@@ -591,6 +610,17 @@ func (a *App) doBatch(isEncrypt bool) {
 
 	paths := []string{inputDir}
 
+	// 从UI获取批量处理模式
+	var batchMode batch.Mode
+	switch a.batchModeSelect.Selected {
+	case a.tr.T("batch.mode.files"):
+		batchMode = batch.ModeFiles
+	case a.tr.T("batch.mode.folder"):
+		batchMode = batch.ModeFolder
+	default:
+		batchMode = batch.ModeFolderRecursive
+	}
+
 	// 从UI获取批量处理选项
 	preserveStruct := a.batchPreserveCheck.Checked
 	maxThreads := 1 // 默认串行
@@ -608,7 +638,7 @@ func (a *App) doBatch(isEncrypt bool) {
 		a.batchProcessor = batch.New(maxThreads, a.cfgMgr.GetBufferSizeMB())
 		a.batchProcessor.SetProgressCallback(a.onBatchProgress)
 
-		result, err := a.batchProcessor.Process(op, batch.ModeFolderRecursive, paths, outputDir, preserveStruct,
+		result, err := a.batchProcessor.Process(op, batchMode, paths, outputDir, preserveStruct,
 			algo, kt, nil, []byte(password), nil, nil, nil)
 		if err != nil {
 			a.batchStatusLabel.SetText(fmt.Sprintf("❌ %s", err.Error()))
@@ -631,6 +661,73 @@ func (a *App) onBatchProgress(p batch.Progress) {
 		a.batchProgress.SetValue(float64(p.CurrentFile) / float64(p.TotalFiles))
 		a.batchStatusLabel.SetText(fmt.Sprintf("%s: %d/%d - %s",
 			a.tr.T("batch.progress"), p.CurrentFile, p.TotalFiles, p.CurrentName))
+	}
+}
+
+// safeRebuildUI 安全重建UI（保存/恢复用户输入，与 Python _reload_ui 一致）
+func (a *App) safeRebuildUI() {
+	// 保存当前输入值
+	savedEncInput := ""
+	savedEncOutput := ""
+	savedDecInput := ""
+	savedDecKeyFile := ""
+	savedDecPass := ""
+	savedDecOutput := ""
+	savedBatchInput := ""
+	savedBatchOutput := ""
+
+	if a.encInputEntry != nil {
+		savedEncInput = a.encInputEntry.Text
+	}
+	if a.encOutputEntry != nil {
+		savedEncOutput = a.encOutputEntry.Text
+	}
+	if a.decInputEntry != nil {
+		savedDecInput = a.decInputEntry.Text
+	}
+	if a.decKeyFileEntry != nil {
+		savedDecKeyFile = a.decKeyFileEntry.Text
+	}
+	if a.decPassEntry != nil {
+		savedDecPass = a.decPassEntry.Text
+	}
+	if a.decOutputEntry != nil {
+		savedDecOutput = a.decOutputEntry.Text
+	}
+	if a.batchInputEntry != nil {
+		savedBatchInput = a.batchInputEntry.Text
+	}
+	if a.batchOutputEntry != nil {
+		savedBatchOutput = a.batchOutputEntry.Text
+	}
+
+	// 重建UI
+	a.setupUI()
+
+	// 恢复输入值
+	if a.encInputEntry != nil && savedEncInput != "" {
+		a.encInputEntry.SetText(savedEncInput)
+	}
+	if a.encOutputEntry != nil && savedEncOutput != "" {
+		a.encOutputEntry.SetText(savedEncOutput)
+	}
+	if a.decInputEntry != nil && savedDecInput != "" {
+		a.decInputEntry.SetText(savedDecInput)
+	}
+	if a.decKeyFileEntry != nil && savedDecKeyFile != "" {
+		a.decKeyFileEntry.SetText(savedDecKeyFile)
+	}
+	if a.decPassEntry != nil && savedDecPass != "" {
+		a.decPassEntry.SetText(savedDecPass)
+	}
+	if a.decOutputEntry != nil && savedDecOutput != "" {
+		a.decOutputEntry.SetText(savedDecOutput)
+	}
+	if a.batchInputEntry != nil && savedBatchInput != "" {
+		a.batchInputEntry.SetText(savedBatchInput)
+	}
+	if a.batchOutputEntry != nil && savedBatchOutput != "" {
+		a.batchOutputEntry.SetText(savedBatchOutput)
 	}
 }
 

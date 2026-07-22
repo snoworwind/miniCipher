@@ -221,7 +221,6 @@ func (sd *SettingsDialog) buildPathsTab() fyne.CanvasObject {
 		&widget.FormItem{Text: tr.T("settings.default_input_dir"), Widget: container.NewBorder(nil, nil, browseInputBtn, nil, sd.inputDirEntry)},
 		&widget.FormItem{Text: tr.T("settings.default_output_dir"), Widget: container.NewBorder(nil, nil, browseOutputBtn, nil, sd.outputDirEntry)},
 	)
-	_ = clearHistoryBtn
 
 	return container.NewVBox(
 		widget.NewLabelWithStyle(tr.T("tab.paths"), fyne.TextAlignLeading, fyne.TextStyle{Bold: true}),
@@ -239,7 +238,11 @@ func (sd *SettingsDialog) buildAdvancedTab() fyne.CanvasObject {
 	sd.debugCheck.SetChecked(cfg.Debug)
 
 	sd.logLevelSelect = widget.NewSelect([]string{"DEBUG", "INFO", "WARNING", "ERROR"}, nil)
-	sd.logLevelSelect.SetSelected("INFO")
+	if cfg.Advanced.LogLevel != "" {
+		sd.logLevelSelect.SetSelected(cfg.Advanced.LogLevel)
+	} else {
+		sd.logLevelSelect.SetSelected("INFO")
+	}
 
 	// 缓冲区大小
 	sd.bufferSizeEntry = widget.NewEntry()
@@ -313,6 +316,7 @@ func (sd *SettingsDialog) collectValues() *config.Config {
 	} else {
 		newCfg.Advanced.BufferSize = sd.original.Advanced.BufferSize
 	}
+	newCfg.Advanced.LogLevel = sd.logLevelSelect.Selected
 	// Debug
 	newCfg.Debug = sd.debugCheck.Checked
 
@@ -377,7 +381,7 @@ func (sd *SettingsDialog) showRestartPrompt(langChanged, themeChanged bool) {
 	})
 
 	laterBtn := widget.NewButton("稍后重启", func() {
-		// 什么都不做
+		sd.win.Close()
 	})
 
 	content := container.NewVBox(
@@ -389,8 +393,18 @@ func (sd *SettingsDialog) showRestartPrompt(langChanged, themeChanged bool) {
 }
 
 func (sd *SettingsDialog) onOK() {
+	// 预检测UI变更（在onApply修改sd.cfg之前）
+	newCfg := sd.collectValues()
+	uiChanged := sd.cfg.UI.Language != newCfg.UI.Language ||
+		sd.cfg.UI.Theme != newCfg.UI.Theme
+
 	sd.onApply()
-	sd.win.Close()
+
+	// 如果UI有变更，onApply已弹出重启提示，由提示按钮处理关闭
+	// 如果UI无变更，直接关闭设置窗口
+	if !uiChanged {
+		sd.win.Close()
+	}
 }
 
 func (sd *SettingsDialog) onCancel() {

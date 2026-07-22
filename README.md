@@ -4,9 +4,10 @@
 
 <div align="center">
   <img src="https://img.shields.io/badge/Python-3.7%2B-blue" alt="Python 3.7+">
+  <img src="https://img.shields.io/badge/Go-1.21%2B-00ADD8" alt="Go 1.21+">
   <img src="https://img.shields.io/badge/Platform-Windows%20%7C%20macOS%20%7C%20Linux-green" alt="Cross-Platform">
   <img src="https://img.shields.io/badge/License-MIT-yellow" alt="MIT License">
-  <img src="https://img.shields.io/badge/Version-1.0-orange" alt="Version 1.0">
+  <img src="https://img.shields.io/badge/Version-2.0-orange" alt="Version 2.0">
 </div>
 
 ## 📋 概述 / Overview
@@ -171,8 +172,8 @@ python build.py --test           # 测试构建结果
 
 ```
 miniCipher/
-├── main.py                    # 主程序入口
-├── cipher_gui.py              # GUI主界面（支持多语言）
+├── main.py                    # Python 主程序入口
+├── cipher_gui.py              # Python GUI主界面（支持多语言）
 ├── cipher_algorithms.py       # 加密算法实现
 ├── config_manager.py          # 配置文件管理系统
 ├── translations.py            # 多语言翻译模块
@@ -181,7 +182,19 @@ miniCipher/
 ├── test_cipher.py             # 核心加密测试
 ├── launch.bat                 # Windows启动脚本
 ├── launch.command             # macOS/Linux启动脚本
-├── README                     # 说明文档
+├── go-migrate/                # Go v2.0 版本
+│   ├── cmd/gui/               # GUI 程序入口
+│   ├── cmd/minicipher/        # 命令行程序入口
+│   ├── internal/
+│   │   ├── batch/             # 批量处理模块
+│   │   ├── config/            # 配置管理 + 验证器
+│   │   ├── crypto/            # 加密算法 (OTP/AES256/FileCipher)
+│   │   ├── lang/              # 多语言翻译 (中/英)
+│   │   ├── theme/             # 主题管理 (浅色/深色)
+│   │   └── ui/                # GUI 界面 (设置/加密/解密/批量)
+│   ├── go.mod / go.sum        # Go 依赖管理
+│   └── Makefile               # 构建脚本
+├── README.md                  # 说明文档
 └── LICENSE                    # 许可证文件
 ```
 
@@ -206,6 +219,86 @@ python test_cipher.py
 
 - **自动发布**：创建git tag时自动发布新版本
 - **预构建文件**：可从GitHub Releases页面下载
+
+## 🐹 Go 版本 (v2.0) / Go Version (v2.0)
+
+项目已从 Python/tkinter 迁移至 Go/Fyne，全新 v2.0 版本提供现代化的用户界面和更好的跨平台体验。
+
+The project has been migrated from Python/tkinter to Go/Fyne, the new v2.0 version provides a modern user interface and better cross-platform experience.
+
+### 系统要求 / System Requirements
+
+- **Go 1.21** 或更高版本 / or higher
+- **Fyne** GUI 框架 (自动安装依赖)
+- 操作系统：Windows / macOS / Linux
+
+### 安装与运行 / Installation & Running
+
+```bash
+# 1. 进入 Go 项目目录
+cd go-migrate
+
+# 2. 安装依赖
+go mod tidy
+
+# 3. 编译并运行 GUI 版本
+go run ./cmd/gui
+
+# 4. 或编译为可执行文件
+go build -o minicipher ./cmd/gui
+./minicipher
+```
+
+### 命令行版本 / CLI Version
+
+```bash
+# 编译命令行工具
+go build -o minicipher-cli ./cmd/minicipher
+
+# 加密文件
+./minicipher-cli encrypt -i input.txt -o output.enc -a AES256 -k password -p "mypassword"
+
+# 解密文件
+./minicipher-cli decrypt -i output.enc -o decrypted.txt -p "mypassword"
+```
+
+### Python vs Go 版本对比 / Comparison
+
+| 特性 | Python (v1.0) | Go (v2.0) |
+|------|--------------|-----------|
+| GUI 框架 | tkinter | Fyne |
+| 启动速度 | 较慢 | 快速 |
+| 内存占用 | 较高 | 较低 |
+| 单文件分发 | 需 PyInstaller | 原生静态编译 |
+| 主题支持 | 手动实现 (深/浅) | Fyne 内置 |
+| 加密算法 | OTP / AES256-GCM | OTP / AES256-GCM |
+| 批量处理 | 支持 | 支持 |
+| 配置文件 | JSON | JSON (兼容) |
+| 加密文件格式 | 二进制兼容 | 二进制兼容 |
+| 密钥文件格式 | hex/binary 可选 | hex/binary 可选 |
+
+### Go 项目结构 / Go Project Structure
+
+```
+go-migrate/
+├── cmd/
+│   ├── gui/main.go            # GUI 应用程序入口
+│   └── minicipher/main.go     # 命令行工具入口
+├── internal/
+│   ├── batch/batch.go         # 批量加密/解密处理
+│   ├── config/config.go       # 配置管理器
+│   ├── config/validator.go    # 配置验证器
+│   ├── crypto/aes.go          # AES256-GCM 算法实现
+│   ├── crypto/otp.go          # OTP 一次性密码本实现
+│   ├── crypto/filecipher.go   # 文件加解密高级API
+│   ├── crypto/types.go        # 类型定义
+│   ├── lang/i18n.go           # 多语言翻译
+│   ├── theme/theme.go         # 主题管理
+│   ├── ui/app.go              # 主界面 (加密/解密/批量)
+│   └── ui/settings.go         # 设置对话框
+├── go.mod / go.sum            # Go 模块定义
+└── Makefile                   # 构建脚本
+```
 
 ## ❓ 常见问题 / FAQ
 
@@ -245,8 +338,15 @@ python test_cipher.py
 
 ## 📋 版本历史 / Version History
 
+- **v2.0** (2026-07) - Go/Fyne 重写版本，现代化 UI，静态编译，性能提升
+  - Go 1.21+ / Fyne GUI 框架
+  - 支持批量处理模式选择（文件/文件夹/递归）
+  - 并行处理 + 最大线程数配置
+  - OTP 密钥格式可选 (hex/binary)
+  - 主题深色/浅色切换
+  - 命令行版支持 (cmd/minicipher)
 - **v1.0** (2026-02) - 初始稳定版本，支持配置系统和多语言
-- 主要功能：配置文件管理、中英文界面、增强错误处理
+  - 主要功能：配置文件管理、中英文界面、增强错误处理
 
 ---
 

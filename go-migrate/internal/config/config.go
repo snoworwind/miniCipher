@@ -27,7 +27,8 @@ type UIConfig struct {
 
 // AdvancedConfig 高级配置
 type AdvancedConfig struct {
-	BufferSize int `json:"buffer_size"` // MB - 缓冲区大小
+	BufferSize int    `json:"buffer_size"` // MB - 缓冲区大小
+	LogLevel   string `json:"log_level"`   // 日志级别 DEBUG/INFO/WARNING/ERROR
 }
 
 // CryptoConfig 加密配置
@@ -81,6 +82,7 @@ func DefaultConfig() *Config {
 		Debug: false,
 		Advanced: AdvancedConfig{
 			BufferSize: 10,
+			LogLevel:   "INFO",
 		},
 	}
 }
