@@ -20,8 +20,6 @@ type SettingsDialog struct {
 	cfgMgr *config.Manager
 	cfg    *config.Config
 
-	original *config.Config // 原始设置快照
-
 	// UI 组件
 	langSelect       *widget.Select
 	themeSelect      *widget.Select
@@ -51,17 +49,20 @@ func NewSettingsDialog(a *App) *SettingsDialog {
 	sd := &SettingsDialog{
 		app:    a,
 		cfgMgr: a.cfgMgr,
-		cfg:    cfg,
+		cfg:    deepCopyConfig(cfg),
 	}
-	// 深拷贝原始设置
-	orig := *cfg
-	sd.original = &orig
 
 	sd.win = fyne.CurrentApp().NewWindow(a.tr.T("settings"))
 	sd.setupUI()
 	sd.win.Resize(fyne.NewSize(660, 560))
 
 	return sd
+}
+
+// deepCopyConfig 深拷贝配置用于设置对话框（编辑期间不影响主配置）
+func deepCopyConfig(cfg *config.Config) *config.Config {
+	c := *cfg
+	return &c
 }
 
 func (sd *SettingsDialog) Show() {
@@ -285,7 +286,7 @@ func (sd *SettingsDialog) collectValues() *config.Config {
 	if v, err := strconv.Atoi(sd.passMinEntry.Text); err == nil && v > 0 {
 		newCfg.Crypto.PasswordMinLength = v
 	} else {
-		newCfg.Crypto.PasswordMinLength = sd.original.Crypto.PasswordMinLength
+		newCfg.Crypto.PasswordMinLength = sd.cfg.Crypto.PasswordMinLength
 	}
 	newCfg.Crypto.RequireStrongPass = sd.strongCheck.Checked
 	// OTP 密钥格式
@@ -306,7 +307,7 @@ func (sd *SettingsDialog) collectValues() *config.Config {
 	if v, err := strconv.Atoi(sd.maxThreadsEntry.Text); err == nil && v >= 1 && v <= 16 {
 		newCfg.Batch.MaxThreads = v
 	} else {
-		newCfg.Batch.MaxThreads = sd.original.Batch.MaxThreads
+		newCfg.Batch.MaxThreads = sd.cfg.Batch.MaxThreads
 	}
 	newCfg.Batch.PreserveStructure = sd.cfg.Batch.PreserveStructure
 	// Advanced
@@ -314,7 +315,7 @@ func (sd *SettingsDialog) collectValues() *config.Config {
 	if v, err := strconv.Atoi(sd.bufferSizeEntry.Text); err == nil && v >= 1 && v <= 100 {
 		newCfg.Advanced.BufferSize = v
 	} else {
-		newCfg.Advanced.BufferSize = sd.original.Advanced.BufferSize
+		newCfg.Advanced.BufferSize = sd.cfg.Advanced.BufferSize
 	}
 	newCfg.Advanced.LogLevel = sd.logLevelSelect.Selected
 	// Debug
@@ -329,13 +330,11 @@ func (sd *SettingsDialog) onApply() {
 	langChanged := sd.cfg.UI.Language != newCfg.UI.Language
 	themeChanged := sd.cfg.UI.Theme != newCfg.UI.Theme
 
+	// 更新设置对话框内部 cfg
 	sd.cfg = newCfg
-	sd.cfgMgr.Get().UI = newCfg.UI
-	sd.cfgMgr.Get().Crypto = newCfg.Crypto
-	sd.cfgMgr.Get().Paths = newCfg.Paths
-	sd.cfgMgr.Get().Batch = newCfg.Batch
-	sd.cfgMgr.Get().Advanced = newCfg.Advanced
-	sd.cfgMgr.Get().Debug = newCfg.Debug
+
+	// 使用 Replace 原子替换主配置
+	sd.cfgMgr.Replace(newCfg)
 
 	if err := sd.cfgMgr.Save(); err != nil {
 		dialog.ShowError(fmt.Errorf("保存设置失败: %v", err), sd.win)
@@ -355,7 +354,7 @@ func (sd *SettingsDialog) onApply() {
 	}
 }
 
-// showRestartPrompt 显示重启提示对话框（与 Python 的 _show_restart_prompt 一致）
+// showRestartPrompt 显示重启提示对话框
 func (sd *SettingsDialog) showRestartPrompt(langChanged, themeChanged bool) {
 	tr := sd.app.tr
 
@@ -408,26 +407,13 @@ func (sd *SettingsDialog) onOK() {
 }
 
 func (sd *SettingsDialog) onCancel() {
-	// 恢复原始设置到 cfgMgr
-	sd.cfgMgr.Get().UI = sd.original.UI
-	sd.cfgMgr.Get().Crypto = sd.original.Crypto
-	sd.cfgMgr.Get().Paths = sd.original.Paths
-	sd.cfgMgr.Get().Batch = sd.original.Batch
-	sd.cfgMgr.Get().Advanced = sd.original.Advanced
-	sd.cfgMgr.Get().Debug = sd.original.Debug
-	sd.cfgMgr.Save()
 	sd.win.Close()
 }
 
 func (sd *SettingsDialog) onReset() {
 	defaultCfg := config.DefaultConfig()
 	sd.cfg = defaultCfg
-	sd.cfgMgr.Get().UI = defaultCfg.UI
-	sd.cfgMgr.Get().Crypto = defaultCfg.Crypto
-	sd.cfgMgr.Get().Paths = defaultCfg.Paths
-	sd.cfgMgr.Get().Batch = defaultCfg.Batch
-	sd.cfgMgr.Get().Advanced = defaultCfg.Advanced
-	sd.cfgMgr.Get().Debug = defaultCfg.Debug
+	sd.cfgMgr.Replace(defaultCfg)
 
 	// 更新 UI
 	sd.langSelect.SetSelected("简体中文")
@@ -457,8 +443,6 @@ func (sd *SettingsDialog) onReset() {
 func (sd *SettingsDialog) onClearHistory() {
 	sd.cfg.Paths.LastInputFolder = ""
 	sd.cfg.Paths.LastOutputFolder = ""
-	sd.cfgMgr.Get().Paths.LastInputFolder = ""
-	sd.cfgMgr.Get().Paths.LastOutputFolder = ""
 	if err := sd.cfgMgr.Save(); err != nil {
 		dialog.ShowError(fmt.Errorf("清除失败: %v", err), sd.win)
 	} else {

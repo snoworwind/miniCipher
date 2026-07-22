@@ -5,6 +5,7 @@ import (
 	"crypto/cipher"
 	"crypto/rand"
 	"crypto/sha256"
+	"encoding/binary"
 	"encoding/hex"
 	"fmt"
 	"io"
@@ -103,13 +104,24 @@ func (a *AES256Algorithm) DecryptWithPassword(ciphertext, password, salt, iv, ta
 	return a.DecryptWithRandomKey(ciphertext, key, iv, tag)
 }
 
-// EncryptToFile 加密到文件
-// 对小于 chunkSize 的文件使用内存模式，大文件使用分块流式处理
+// EncryptToFile 加密到文件（使用分块 GCM 流式格式）
+// 始终使用新格式 AES\x02，内存占用 ≤ ~2×chunkSize
 // 文件格式:
-//   随机密钥: [b'AES\x00' 4B] [IV 12B] [密文 N B] [Tag 16B]
-//   密码模式: [b'AES\x01' 4B] [saltLen 1B] [salt N B] [IV 12B] [密文 N B] [Tag 16B]
+//
+//	[AES\x02 4B]                    ← 分块版本标识
+//	[saltLen 1B] [salt NB]          ← 密码模式（随机密钥模式跳过）
+//	[baseIV 12B]                    ← 基础 IV
+//	[chunkSize 4B]                  ← 块大小
+//	[chunk1: ciphertextLen(4B) | ciphertext(Var) | tag(16B)]
+//	[chunk2: ciphertextLen(4B) | ciphertext(Var) | tag(16B)]
+//	...
 func (a *AES256Algorithm) EncryptToFile(inputFile, outputFile string, keyType KeyType, password, salt []byte, chunkSize int) (*EncryptionResult, error) {
-	var key, iv []byte
+	return a.EncryptToFileWithProgress(inputFile, outputFile, keyType, password, salt, chunkSize, nil)
+}
+
+// EncryptToFileWithProgress 带进度回调的加密到文件
+func (a *AES256Algorithm) EncryptToFileWithProgress(inputFile, outputFile string, keyType KeyType, password, salt []byte, chunkSize int, progress ProgressFunc) (*EncryptionResult, error) {
+	var key []byte
 	var kt KeyType
 
 	if chunkSize <= 0 {
@@ -133,8 +145,9 @@ func (a *AES256Algorithm) EncryptToFile(inputFile, outputFile string, keyType Ke
 		kt = KeyTypeRandom
 	}
 
-	iv = make([]byte, AESIVLength)
-	if _, err := rand.Read(iv); err != nil {
+	// 生成基础 IV
+	baseIV := make([]byte, AESIVLength)
+	if _, err := rand.Read(baseIV); err != nil {
 		return nil, fmt.Errorf("生成随机IV失败: %w", err)
 	}
 
@@ -147,11 +160,18 @@ func (a *AES256Algorithm) EncryptToFile(inputFile, outputFile string, keyType Ke
 		return nil, fmt.Errorf("创建GCM模式失败: %w", err)
 	}
 
-	fileInfo, err := os.Stat(inputFile)
+	inFile, err := os.Open(inputFile)
+	if err != nil {
+		return nil, fmt.Errorf("打开输入文件失败: %w", err)
+	}
+	defer inFile.Close()
+
+	// 获取文件总大小
+	fileInfo, err := inFile.Stat()
 	if err != nil {
 		return nil, fmt.Errorf("获取文件信息失败: %w", err)
 	}
-	fileSize := fileInfo.Size()
+	totalSize := fileInfo.Size()
 
 	outFile, err := os.Create(outputFile)
 	if err != nil {
@@ -160,74 +180,61 @@ func (a *AES256Algorithm) EncryptToFile(inputFile, outputFile string, keyType Ke
 	defer outFile.Close()
 
 	// 写入文件头
+	outFile.Write([]byte{'A', 'E', 'S', byte(AESVersionChunked)})
 	if kt == KeyTypePassword {
-		outFile.Write([]byte{'A', 'E', 'S', 0x01})
 		outFile.Write([]byte{byte(len(salt))})
 		outFile.Write(salt)
-	} else {
-		outFile.Write([]byte{'A', 'E', 'S', 0x00})
 	}
-	outFile.Write(iv)
+	outFile.Write(baseIV)
 
-	// 根据文件大小选择处理方式
-	if fileSize <= int64(chunkSize) {
-		// 小文件：一次性读取全部明文并加密（与 Python 一致）
-		plaintext, err := os.ReadFile(inputFile)
-		if err != nil {
-			return nil, fmt.Errorf("读取输入文件失败: %w", err)
-		}
-		sealed := gcm.Seal(nil, iv, plaintext, nil)
-		tagStart := len(sealed) - AESTagLength
-		outFile.Write(sealed[:tagStart])
-		outFile.Write(sealed[tagStart:])
+	// 写入 chunkSize（4字节 big-endian）
+	chunkSizeBuf := make([]byte, 4)
+	binary.BigEndian.PutUint32(chunkSizeBuf, uint32(chunkSize))
+	outFile.Write(chunkSizeBuf)
 
-		return &EncryptionResult{
-			Key:       key,
-			IV:        iv,
-			Tag:       sealed[tagStart:],
-			Salt:      salt,
-			Algorithm: AlgorithmAES256,
-			KeyType:   kt,
-		}, nil
-	}
-
-	// 大文件：分块流式加密（逐块读取、加密、写入）
-	// GCM 不支持真正的 update/finalize 流式 API，但我们可以分块处理：
-	// 先加密到临时文件，然后用正确格式写入
-	inFile, err := os.Open(inputFile)
-	if err != nil {
-		return nil, fmt.Errorf("打开输入文件失败: %w", err)
-	}
-	defer inFile.Close()
-
-	// 分块读取、加密、写入密文
+	// 分块读取、加密、写入
 	buf := make([]byte, chunkSize)
-	var sealedOutput []byte
+	chunkIndex := uint64(0)
+	lenBuf := make([]byte, 4)
+	var totalProcessed int64
+
 	for {
-		n, err := inFile.Read(buf)
+		n, readErr := inFile.Read(buf)
 		if n > 0 {
-			// 对每个块单独加密（GCM 模式下每次 Seal 都生成独立的密文+tag）
-			// 但由于我们需要一个统一的 tag，这里采用累积方式
-			sealedOutput = append(sealedOutput, buf[:n]...)
+			// 生成当前块的 IV = baseIV XOR chunkIndex
+			chunkIV := makeChunkIV(baseIV, chunkIndex)
+
+			// GCM Seal
+			sealed := gcm.Seal(nil, chunkIV, buf[:n], nil)
+			// sealed = ciphertext + tag (tag 在最后 16 字节)
+
+			// 写入块长度（仅密文长度，不含 tag）
+			ciphertextLen := len(sealed) - AESTagLength
+			binary.BigEndian.PutUint32(lenBuf, uint32(ciphertextLen))
+			outFile.Write(lenBuf)
+
+			// 写入密文 + tag
+			outFile.Write(sealed)
+
+			chunkIndex++
+			totalProcessed += int64(n)
+
+			if progress != nil {
+				progress(totalProcessed, totalSize)
+			}
 		}
-		if err == io.EOF {
+		if readErr == io.EOF {
 			break
 		}
-		if err != nil {
-			return nil, fmt.Errorf("读取输入文件失败: %w", err)
+		if readErr != nil {
+			return nil, fmt.Errorf("读取输入文件失败: %w", readErr)
 		}
 	}
-
-	// 一次性 GCM 加密所有累积的明文（与 Python 一致，GCM 需要全部明文计算 tag）
-	sealed := gcm.Seal(nil, iv, sealedOutput, nil)
-	tagStart := len(sealed) - AESTagLength
-	outFile.Write(sealed[:tagStart])
-	outFile.Write(sealed[tagStart:])
 
 	return &EncryptionResult{
 		Key:       key,
-		IV:        iv,
-		Tag:       sealed[tagStart:],
+		IV:        baseIV,
+		Tag:       nil, // 分块模式无统一 tag
 		Salt:      salt,
 		Algorithm: AlgorithmAES256,
 		KeyType:   kt,
@@ -235,12 +242,44 @@ func (a *AES256Algorithm) EncryptToFile(inputFile, outputFile string, keyType Ke
 }
 
 // DecryptFromFile 通用AES文件解密（自动检测格式）
+// - 旧格式 (AES\x00 / AES\x01)：全量加载解密
+// - 新格式 (AES\x02)：分块流式解密，内存 ≤ ~chunkSize
 func (a *AES256Algorithm) DecryptFromFile(inputFile, outputFile string,
 	keyType KeyType, key, iv, tag, password, salt []byte, chunkSize int) (*DecryptionResult, error) {
+	return a.DecryptFromFileWithProgress(inputFile, outputFile, keyType, key, iv, tag, password, salt, chunkSize, nil)
+}
+
+// DecryptFromFileWithProgress 带进度回调的解密
+func (a *AES256Algorithm) DecryptFromFileWithProgress(inputFile, outputFile string,
+	keyType KeyType, key, iv, tag, password, salt []byte, chunkSize int, progress ProgressFunc) (*DecryptionResult, error) {
 
 	if chunkSize <= 0 {
 		chunkSize = 10 * 1024 * 1024 // 默认 10MB
 	}
+
+	// 读取文件头以判断格式版本
+	f, err := os.Open(inputFile)
+	if err != nil {
+		return nil, fmt.Errorf("打开文件失败: %w", err)
+	}
+
+	header := make([]byte, 4)
+	if _, err := io.ReadFull(f, header); err != nil {
+		f.Close()
+		return nil, fmt.Errorf("读取文件头失败: %w", err)
+	}
+
+	version := AESFileVersion(header[3])
+	if version.IsLegacyFormat() {
+		f.Close()
+		return a.decryptLegacy(inputFile, outputFile, keyType, key, iv, tag, password, salt, chunkSize, progress)
+	}
+	return a.decryptChunked(f, outputFile, keyType, key, password, chunkSize, progress)
+}
+
+// decryptLegacy 旧格式解密（全量加载）
+func (a *AES256Algorithm) decryptLegacy(inputFile, outputFile string,
+	keyType KeyType, key, iv, tag, password, salt []byte, chunkSize int, progress ProgressFunc) (*DecryptionResult, error) {
 
 	info, ciphertext, err := readAESFile(inputFile)
 	if err != nil {
@@ -274,9 +313,146 @@ func (a *AES256Algorithm) DecryptFromFile(inputFile, outputFile string,
 	if err != nil {
 		return nil, err
 	}
+	// 立即释放密文内存
+	ciphertext = nil
 
-	if err := os.WriteFile(outputFile, plaintext, 0644); err != nil {
-		return nil, fmt.Errorf("写入输出文件失败: %w", err)
+	// 分块写入输出文件
+	outFile, err := os.Create(outputFile)
+	if err != nil {
+		return nil, fmt.Errorf("创建输出文件失败: %w", err)
+	}
+	defer outFile.Close()
+
+	totalLen := int64(len(plaintext))
+	writeChunkSize := chunkSize
+	if writeChunkSize > len(plaintext) {
+		writeChunkSize = len(plaintext)
+	}
+	var written int64
+	for offset := 0; offset < len(plaintext); offset += writeChunkSize {
+		end := offset + writeChunkSize
+		if end > len(plaintext) {
+			end = len(plaintext)
+		}
+		if _, err := outFile.Write(plaintext[offset:end]); err != nil {
+			return nil, fmt.Errorf("写入输出文件失败: %w", err)
+		}
+		written += int64(end - offset)
+		if progress != nil {
+			progress(written, totalLen)
+		}
+	}
+
+	return &DecryptionResult{Algorithm: AlgorithmAES256}, nil
+}
+
+// decryptChunked 分块 GCM 流式解密
+// 内存占用 ≈ chunkSize（每个块独立解密后立即写入输出文件）
+func (a *AES256Algorithm) decryptChunked(f *os.File, outputFile string,
+	keyType KeyType, key, password []byte, chunkSize int, progress ProgressFunc) (*DecryptionResult, error) {
+	defer f.Close()
+
+	var finalKey []byte
+
+	// 获取文件总大小用于进度估算
+	fileInfo, err := f.Stat()
+	if err != nil {
+		return nil, fmt.Errorf("获取文件信息失败: %w", err)
+	}
+	totalSize := fileInfo.Size()
+
+	// 读取密码模式的 salt
+	if keyType == KeyTypePassword {
+		saltLenBuf := make([]byte, 1)
+		if _, err := io.ReadFull(f, saltLenBuf); err != nil {
+			return nil, fmt.Errorf("读取盐值长度失败: %w", err)
+		}
+		salt := make([]byte, saltLenBuf[0])
+		if _, err := io.ReadFull(f, salt); err != nil {
+			return nil, fmt.Errorf("读取盐值失败: %w", err)
+		}
+		finalKey = pbkdf2.Key(password, salt, PBKDF2Iters, AESKeyLength, sha256.New)
+	} else {
+		finalKey = key
+	}
+
+	// 读取基础 IV
+	baseIV := make([]byte, AESIVLength)
+	if _, err := io.ReadFull(f, baseIV); err != nil {
+		return nil, fmt.Errorf("读取IV失败: %w", err)
+	}
+
+	// 读取文件中的 chunkSize（用于验证，但解密使用传入的 chunkSize）
+	fileChunkSizeBuf := make([]byte, 4)
+	if _, err := io.ReadFull(f, fileChunkSizeBuf); err != nil {
+		return nil, fmt.Errorf("读取块大小失败: %w", err)
+	}
+	// 忽略文件中的 chunkSize，使用调用方传入的 chunkSize
+	_ = binary.BigEndian.Uint32(fileChunkSizeBuf)
+
+	block, err := aes.NewCipher(finalKey)
+	if err != nil {
+		return nil, fmt.Errorf("创建AES密码器失败: %w", err)
+	}
+	gcm, err := cipher.NewGCM(block)
+	if err != nil {
+		return nil, fmt.Errorf("创建GCM模式失败: %w", err)
+	}
+
+	outFile, err := os.Create(outputFile)
+	if err != nil {
+		return nil, fmt.Errorf("创建输出文件失败: %w", err)
+	}
+	defer outFile.Close()
+
+	// 分块解密
+	chunkIndex := uint64(0)
+	lenBuf := make([]byte, 4)
+	tryCount := 0
+	reportEvery := 10 // 每 10 个块汇报一次进度（减少回调开销）
+	var totalProcessed int64
+
+	for {
+		// 读取块长度
+		if _, err := io.ReadFull(f, lenBuf); err != nil {
+			if err == io.EOF || err == io.ErrUnexpectedEOF {
+				break // 正常结束
+			}
+			return nil, fmt.Errorf("读取块长度失败: %w", err)
+		}
+		ciphertextLen := binary.BigEndian.Uint32(lenBuf)
+
+		// 读取密文块（包含 tag）
+		chunkBuf := make([]byte, int(ciphertextLen)+AESTagLength)
+		if _, err := io.ReadFull(f, chunkBuf); err != nil {
+			return nil, fmt.Errorf("读取密文块失败: %w", err)
+		}
+
+		// 生成块 IV
+		chunkIV := makeChunkIV(baseIV, chunkIndex)
+
+		// GCM Open 解密
+		plaintext, err := gcm.Open(nil, chunkIV, chunkBuf, nil)
+		if err != nil {
+			return nil, fmt.Errorf("块 %d 解密失败（密钥或文件可能已损坏）: %w", chunkIndex, err)
+		}
+
+		if _, writeErr := outFile.Write(plaintext); writeErr != nil {
+			return nil, fmt.Errorf("写入输出文件失败: %w", writeErr)
+		}
+
+		chunkIndex++
+		totalProcessed += int64(len(plaintext))
+		tryCount++
+
+		if progress != nil && tryCount%reportEvery == 0 {
+			progress(totalProcessed, totalSize)
+		}
+	}
+
+	// 最后一次进度汇报
+	if progress != nil {
+		progress(totalProcessed, totalSize)
 	}
 
 	return &DecryptionResult{Algorithm: AlgorithmAES256}, nil
@@ -297,9 +473,22 @@ func (a *AES256Algorithm) decryptBytes(ciphertext, key, iv, tag []byte) ([]byte,
 	return gcm.Open(nil, iv, full, nil)
 }
 
+// makeChunkIV 生成分块 IV：baseIV XOR chunkIndex（大端序，低8字节参与XOR）
+func makeChunkIV(baseIV []byte, chunkIndex uint64) []byte {
+	chunkIV := make([]byte, AESIVLength)
+	copy(chunkIV, baseIV)
+	// 将 chunkIndex 写入后 8 字节进行 XOR
+	idxBuf := make([]byte, 8)
+	binary.BigEndian.PutUint64(idxBuf, chunkIndex)
+	// XOR 到 IV 的后部（IV 12 字节，从 offset 4 开始 XOR 8 字节）
+	for i := 0; i < 8; i++ {
+		chunkIV[4+i] ^= idxBuf[i]
+	}
+	return chunkIV
+}
+
 // SaveKeyFile 保存AES密钥文件（与Python兼容的二进制格式）
 // 格式: 直接写入 key 二进制数据（32字节），与 Python 版本兼容
-// Python 的 save_key 对于 AES: key_{base_name}.key，内容是纯 key 字节
 func SaveKeyFile(path string, key []byte) error {
 	f, err := os.Create(path)
 	if err != nil {
@@ -310,22 +499,28 @@ func SaveKeyFile(path string, key []byte) error {
 	return err
 }
 
-// SaveKeyFileWithIVTag 保存密钥文件（包含 key + iv + tag 的完整格式，用于 Go 内部）
-// 格式: [key 32B] [iv 12B] [tag 16B] = 60 bytes
+// SaveKeyFileWithIVTag 保存密钥文件（包含 key + iv + tag 的完整格式）
+// 格式:
+//
+//	有 tag: [key 32B] [iv 12B] [tag 16B] = 60 bytes
+//	无 tag: [key 32B] [iv 12B]              = 44 bytes（分块 GCM 格式）
 func SaveKeyFileWithIVTag(path string, key, iv, tag []byte) error {
 	f, err := os.Create(path)
 	if err != nil {
 		return err
 	}
 	defer f.Close()
-	f.Write(key)  // 32 bytes
-	f.Write(iv)   // 12 bytes
-	f.Write(tag)  // 16 bytes
+	f.Write(key) // 32 bytes
+	f.Write(iv)  // 12 bytes
+	if len(tag) == AESTagLength {
+		f.Write(tag) // 16 bytes
+	}
 	return nil
 }
 
 // LoadKey 智能加载密钥文件（与 Python 兼容）
 // 自动检测格式：.bin → 原始二进制, .txt → hex 解码, .key → 尝试 hex 后 fallback 二进制
+// 当 .key 后缀文件为 60 字节时，返回完整 32 字节 key（含 IV/Tag 的完整格式由 LoadKeyWithIVTag 处理）
 func LoadKey(path string) ([]byte, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
@@ -344,24 +539,25 @@ func LoadKey(path string) ([]byte, error) {
 
 	switch ext {
 	case ".bin":
-		// 二进制格式
 		return data, nil
 	case ".txt":
-		// 十六进制格式
 		key, err := hex.DecodeString(strings.TrimSpace(string(data)))
 		if err != nil {
 			return nil, fmt.Errorf("解析十六进制密钥失败: %w", err)
 		}
 		return key, nil
 	case ".key":
-		// 尝试 hex 解码，失败则当作二进制
+		// .key 文件可能是 32 字节纯key 或 60 字节完整格式
+		// LoadKey 只返回纯 key；完整格式由 LoadKeyWithIVTag 处理
 		key, err := hex.DecodeString(strings.TrimSpace(string(data)))
 		if err == nil && len(key) > 0 {
 			return key, nil
 		}
+		if len(data) >= 32 {
+			return data[:32], nil
+		}
 		return data, nil
 	default:
-		// 自动检测：尝试 hex，失败则二进制
 		key, err := hex.DecodeString(strings.TrimSpace(string(data)))
 		if err == nil && len(key) > 0 {
 			return key, nil
@@ -371,21 +567,27 @@ func LoadKey(path string) ([]byte, error) {
 }
 
 // LoadKeyWithIVTag 加载完整密钥文件（key + iv + tag），用于 Go 内部格式
+// 兼容两种格式:
+//   - 60 bytes: key(32) + iv(12) + tag(16)
+//   - 44 bytes: key(32) + iv(12)（分块 GCM 无全局 tag）
 func LoadKeyWithIVTag(path string) (key, iv, tag []byte, err error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
 		return nil, nil, nil, fmt.Errorf("读取密钥文件失败: %w", err)
 	}
-	if len(data) < 32+12+16 {
-		return nil, nil, nil, fmt.Errorf("密钥文件格式错误（大小=%d，至少需要60字节）", len(data))
+	if len(data) < 32+12 {
+		return nil, nil, nil, fmt.Errorf("密钥文件格式错误（大小=%d，至少需要44字节）", len(data))
 	}
 	key = data[0:32]
 	iv = data[32:44]
-	tag = data[44:60]
+	if len(data) >= 60 {
+		tag = data[44:60]
+	}
+	// tag 可能为 nil（分块格式）
 	return key, iv, tag, nil
 }
 
-// readAESFile 读取AES加密文件
+// readAESFile 读取AES加密文件（仅用于旧格式）
 func readAESFile(filePath string) (*AESFileInfo, []byte, error) {
 	f, err := os.Open(filePath)
 	if err != nil {
@@ -402,11 +604,11 @@ func readAESFile(filePath string) (*AESFileInfo, []byte, error) {
 	isPassword := false
 
 	switch {
-	case header[0] == 'A' && header[1] == 'E' && header[2] == 'S' && header[3] == 0x00:
-	case header[0] == 'A' && header[1] == 'E' && header[2] == 'S' && header[3] == 0x01:
+	case header[0] == 'A' && header[1] == 'E' && header[2] == 'S' && header[3] == byte(AESVersionRandomKey):
+	case header[0] == 'A' && header[1] == 'E' && header[2] == 'S' && header[3] == byte(AESVersionPassword):
 		isPassword = true
 	default:
-		return nil, nil, fmt.Errorf("无效的AES文件格式: %x", header)
+		return nil, nil, fmt.Errorf("无效的旧AES文件格式: %x", header)
 	}
 
 	if isPassword {

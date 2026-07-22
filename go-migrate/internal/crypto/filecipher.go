@@ -1,15 +1,12 @@
 package crypto
 
 import (
-	"encoding/hex"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
 	"unicode"
-
-	"golang.org/x/crypto/pbkdf2"
-	"crypto/sha256"
 )
 
 // FileCipher 高级文件加密/解密API
@@ -42,6 +39,7 @@ type EncryptionRequest struct {
 	Algorithm       AlgorithmType
 	KeyType         KeyType
 	Password        string
+	OtpKeyFormat    string // "hex" or "binary" for OTP key format
 	ProgressFn      func(percent int, message string)
 }
 
@@ -133,7 +131,27 @@ func (fc *FileCipher) EncryptFile(req EncryptionRequest) (*EncryptionResponse, e
 
 	if req.Algorithm == AlgorithmOTP {
 		otp := NewOTPAlgorithm()
-		result, encryptError = otp.EncryptToFile(req.InputPath, req.OutputPath, chunkSize)
+		// 使用 BuildKeyFilePath 生成密钥文件路径
+		outputDir := filepath.Dir(req.OutputPath)
+		baseName := filepath.Base(req.InputPath)
+		otpFormat := req.OtpKeyFormat
+		if otpFormat == "" {
+			otpFormat = "hex"
+		}
+		keyFilePath := BuildKeyFilePath(outputDir, baseName, AlgorithmOTP, KeyTypeRandom, otpFormat)
+
+		// 创建进度包装器
+		var progressFn ProgressFunc
+		if req.ProgressFn != nil {
+			progressFn = func(processed, total int64) {
+				if total > 0 {
+					pct := int(processed * 100 / total)
+					req.ProgressFn(pct, fmt.Sprintf("加密中... %d%%", pct))
+				}
+			}
+		}
+
+		result, encryptError = otp.EncryptToFileWithProgress(req.InputPath, req.OutputPath, keyFilePath, chunkSize, progressFn)
 	} else { // AES256
 		if req.KeyType == KeyTypePassword {
 			if req.Password == "" {
@@ -146,10 +164,28 @@ func (fc *FileCipher) EncryptFile(req EncryptionRequest) (*EncryptionResponse, e
 			}
 
 			aes := NewAES256Algorithm()
-			result, encryptError = aes.EncryptToFile(req.InputPath, req.OutputPath, KeyTypePassword, []byte(req.Password), nil, chunkSize)
+			var progressFn ProgressFunc
+			if req.ProgressFn != nil {
+				progressFn = func(processed, total int64) {
+					if total > 0 {
+						pct := int(processed * 100 / total)
+						req.ProgressFn(pct, fmt.Sprintf("加密中... %d%%", pct))
+					}
+				}
+			}
+			result, encryptError = aes.EncryptToFileWithProgress(req.InputPath, req.OutputPath, KeyTypePassword, []byte(req.Password), nil, chunkSize, progressFn)
 		} else {
 			aes := NewAES256Algorithm()
-			result, encryptError = aes.EncryptToFile(req.InputPath, req.OutputPath, KeyTypeRandom, nil, nil, chunkSize)
+			var progressFn ProgressFunc
+			if req.ProgressFn != nil {
+				progressFn = func(processed, total int64) {
+					if total > 0 {
+						pct := int(processed * 100 / total)
+						req.ProgressFn(pct, fmt.Sprintf("加密中... %d%%", pct))
+					}
+				}
+			}
+			result, encryptError = aes.EncryptToFileWithProgress(req.InputPath, req.OutputPath, KeyTypeRandom, nil, nil, chunkSize, progressFn)
 		}
 	}
 
@@ -198,17 +234,24 @@ func (fc *FileCipher) DecryptFile(req DecryptionRequest) (*DecryptionResponse, e
 
 	chunkSize := fc.bufferSizeMB * 1024 * 1024
 
+	// 创建进度包装器
+	var progressFn ProgressFunc
+	if req.ProgressFn != nil {
+		progressFn = func(processed, total int64) {
+			if total > 0 {
+				pct := int(processed * 100 / total)
+				req.ProgressFn(pct, fmt.Sprintf("解密中... %d%%", pct))
+			}
+		}
+	}
+
 	switch detectedAlgo {
 	case AlgorithmOTP:
 		if req.KeyPath == "" {
 			return nil, fmt.Errorf("OTP解密需要密钥文件")
 		}
-		key, err := LoadKey(req.KeyPath)
-		if err != nil {
-			return nil, fmt.Errorf("读取密钥文件失败: %w", err)
-		}
 		otp := NewOTPAlgorithm()
-		_, decryptError = otp.DecryptFromFile(req.InputPath, req.OutputPath, key, chunkSize)
+		_, decryptError = otp.DecryptFromFileWithProgress(req.InputPath, req.OutputPath, req.KeyPath, chunkSize, progressFn)
 
 	case AlgorithmAES256:
 		aes := NewAES256Algorithm()
@@ -216,8 +259,8 @@ func (fc *FileCipher) DecryptFile(req DecryptionRequest) (*DecryptionResponse, e
 			if req.Password == "" {
 				return nil, fmt.Errorf("密码模式需要密码")
 			}
-			_, decryptError = aes.DecryptFromFile(req.InputPath, req.OutputPath,
-				KeyTypePassword, nil, nil, nil, []byte(req.Password), nil, chunkSize)
+			_, decryptError = aes.DecryptFromFileWithProgress(req.InputPath, req.OutputPath,
+				KeyTypePassword, nil, nil, nil, []byte(req.Password), nil, chunkSize, progressFn)
 		} else {
 			if req.KeyPath == "" {
 				return nil, fmt.Errorf("需要密钥文件路径")
@@ -227,8 +270,8 @@ func (fc *FileCipher) DecryptFile(req DecryptionRequest) (*DecryptionResponse, e
 			if err != nil {
 				return nil, fmt.Errorf("加载密钥文件失败: %w", err)
 			}
-			_, decryptError = aes.DecryptFromFile(req.InputPath, req.OutputPath,
-				KeyTypeRandom, key, iv, tag, nil, nil, chunkSize)
+			_, decryptError = aes.DecryptFromFileWithProgress(req.InputPath, req.OutputPath,
+				KeyTypeRandom, key, iv, tag, nil, nil, chunkSize, progressFn)
 		}
 
 	default:
@@ -250,7 +293,7 @@ func (fc *FileCipher) loadKeyForAES(path string) (key, iv, tag []byte, err error
 	if err == nil {
 		return key, iv, tag, nil
 	}
-	// 回退到纯key格式（Python兼容）
+	// 回退到纯key格式
 	key, err = LoadKey(path)
 	if err != nil {
 		return nil, nil, nil, err
@@ -261,7 +304,6 @@ func (fc *FileCipher) loadKeyForAES(path string) (key, iv, tag []byte, err error
 
 // SaveKey 保存密钥到文件
 // 支持多种格式：十六进制 (.txt) 或 二进制 (.bin/.key)
-// 与 Python 版本完全兼容
 func (fc *FileCipher) SaveKey(key []byte, outputDir, baseName string, algorithm AlgorithmType, keyType KeyType, format string) (string, error) {
 	if len(key) == 0 {
 		return "", fmt.Errorf("密钥为空")
@@ -272,34 +314,21 @@ func (fc *FileCipher) SaveKey(key []byte, outputDir, baseName string, algorithm 
 		return "", fmt.Errorf("创建输出目录失败: %w", err)
 	}
 
-	// 确定密钥文件扩展名
-	var ext string
-	if algorithm == AlgorithmOTP {
-		if format == "binary" {
-			ext = ".bin"
-		} else {
-			ext = ".txt" // OTP hex format (默认)
-		}
-	} else {
-		ext = ".key" // AES binary format
-	}
-
-	// 生成密钥文件名: key_<baseName><ext>（与 Python 一致）
-	keyFileName := fmt.Sprintf("key_%s%s", baseName, ext)
-	keyFilePath := filepath.Join(outputDir, keyFileName)
+	// 使用统一的路径生成函数
+	keyFilePath := BuildKeyFilePath(outputDir, baseName, algorithm, keyType, format)
 
 	var err error
 	if algorithm == AlgorithmOTP {
 		if format == "binary" {
-			// 二进制格式 - 与 Python 一致
+			// 二进制格式
 			err = os.WriteFile(keyFilePath, key, 0600)
 		} else {
-			// 十六进制文本格式（默认）- 与 Python 一致
-			hexStr := hex.EncodeToString(key)
+			// 十六进制文本格式（默认）
+			hexStr := fmt.Sprintf("%x", key)
 			err = os.WriteFile(keyFilePath, []byte(hexStr), 0600)
 		}
 	} else {
-		// AES 密钥保存为纯二进制（与 Python 兼容）
+		// AES 密钥保存为纯二进制
 		err = SaveKeyFile(keyFilePath, key)
 	}
 
@@ -316,8 +345,7 @@ func (fc *FileCipher) SaveAESKeyAll(key, iv, tag []byte, outputDir, baseName str
 		return "", fmt.Errorf("创建输出目录失败: %w", err)
 	}
 
-	keyFileName := fmt.Sprintf("key_%s.key", baseName)
-	keyFilePath := filepath.Join(outputDir, keyFileName)
+	keyFilePath := BuildKeyFilePath(outputDir, baseName, AlgorithmAES256, KeyTypeRandom, "")
 
 	if err := SaveKeyFileWithIVTag(keyFilePath, key, iv, tag); err != nil {
 		return "", fmt.Errorf("保存密钥文件失败: %w", err)
@@ -327,17 +355,22 @@ func (fc *FileCipher) SaveAESKeyAll(key, iv, tag []byte, outputDir, baseName str
 }
 
 // detectAlgorithmByFileHeader 通过文件头检测算法类型
+// 只读取前4字节，避免大文件完全加载到内存
 func detectAlgorithmByFileHeader(filePath string) AlgorithmType {
-	data, err := os.ReadFile(filePath)
-	if err != nil || len(data) < 4 {
+	f, err := os.Open(filePath)
+	if err != nil {
+		return AlgorithmAES256
+	}
+	defer f.Close()
+
+	header := make([]byte, 4)
+	if _, err := io.ReadFull(f, header); err != nil {
 		return AlgorithmAES256
 	}
 
-	header := data[:4]
-
-	// 检查 AES 文件头: b'AES\x00' 或 b'AES\x01'
+	// 检查 AES 文件头: b'AES\x00', b'AES\x01', b'AES\x02'
 	if header[0] == 'A' && header[1] == 'E' && header[2] == 'S' {
-		if header[3] == 0x00 || header[3] == 0x01 {
+		if header[3] == 0x00 || header[3] == 0x01 || header[3] == 0x02 {
 			return AlgorithmAES256
 		}
 	}
@@ -354,7 +387,3 @@ func detectAlgorithmByFileHeader(filePath string) AlgorithmType {
 
 	return AlgorithmAES256
 }
-
-// 保留 pbkdf2 和 sha256 引用
-var _ = pbkdf2.Key
-var _ = sha256.New

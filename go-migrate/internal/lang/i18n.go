@@ -1,5 +1,7 @@
 package lang
 
+import "fmt"
+
 // Languages 支持的语言
 const (
 	LangZH = "zh_CN"
@@ -24,7 +26,7 @@ func NewTranslator(lang string) *Translator {
 	return t
 }
 
-// T 翻译指定key
+// T 翻译指定key（不带参数格式化）
 func (t *Translator) T(key string) string {
 	if langMap, ok := t.translations[t.currentLang]; ok {
 		if val, ok := langMap[key]; ok {
@@ -40,6 +42,17 @@ func (t *Translator) T(key string) string {
 	return key
 }
 
+// Tf 翻译指定key并进行参数格式化
+// 用法: t.Tf("error.encryption_failed", err.Error())
+// 对应翻译模板: "加密失败: %s"
+func (t *Translator) Tf(key string, args ...interface{}) string {
+	format := t.T(key)
+	if len(args) == 0 {
+		return format
+	}
+	return fmt.Sprintf(format, args...)
+}
+
 // SetLanguage 切换语言
 func (t *Translator) SetLanguage(lang string) {
 	t.currentLang = lang
@@ -50,7 +63,7 @@ func (t *Translator) GetLanguage() string {
 	return t.currentLang
 }
 
-// defaultTranslations 默认翻译文本 — 与 Python 版本保持一致
+// defaultTranslations 默认翻译文本
 var defaultTranslations = TranslationMap{
 	"zh_CN": {
 		"app.title":                          "MiniCipher - 文件加密工具",
@@ -82,6 +95,7 @@ var defaultTranslations = TranslationMap{
 		"batch.decrypt":                      "批量解密",
 		"batch.cancel":                       "取消",
 		"batch.progress":                     "进度",
+		"batch.progress.status":              "%s: %d/%d - %s",
 		"status.ready":                       "就绪",
 		"status.encrypting":                  "正在加密...",
 		"status.decrypting":                  "正在解密...",
@@ -113,10 +127,27 @@ var defaultTranslations = TranslationMap{
 		"error.no_key":                       "需要密钥文件",
 		"error.no_password":                  "密码模式需要密码",
 		"error.need_both_dirs":               "请选择输入和输出目录",
+		"error.input_file_missing":           "错误: 输入文件不存在: %s",
+		"error.output_dir_missing":           "错误: 输出目录不存在: %s",
 		"success.encryption":                 "✅ 加密成功！\n算法: %s\n输出文件: %s",
 		"success.decryption":                 "✅ 解密成功！\n算法: %s\n输出文件: %s",
 		"success.encryption_with_key":        "✅ 加密成功！\n密钥文件: %s (请妥善保管!)",
+		"success.encryption_stat":            "✅ 加密成功!\n输出文件: %s",
+		"success.decryption_stat":            "✅ 解密成功!\n输出文件: %s",
+		"success.batch_result":               "✅ %d/%d 成功, %d 失败, 耗时 %s (%.1f%%)",
 		"key_save_failed":                    "⚠️ 密钥保持失败: %v",
+		"warn.key_save":                      "警告: 保存密钥文件失败: %v",
+		"error.config_load":                  "加载配置失败: %v",
+		"error.unknown_command":              "未知命令: %s",
+		"error.missing_args":                 "错误: 需要输入文件路径和输出文件路径",
+		"error.missing_encrypt_args":         "错误: 需要加密文件路径和输出文件路径",
+		"error.algo_not_supported":           "不支持的算法: %s",
+		"error.password_stdin":               "从标准输入读取密码失败: %v",
+		"error.password_env_empty":           "环境变量 %s 为空或未设置",
+		"warn.password_cli":                  "⚠️  警告: 使用 --password= 标志会将密码暴露在 shell 历史中。",
+		"warn.password_cli_hint":             "   推荐使用 --password-stdin 或 --password-env=MINICIPHER_PASSWORD",
+		"hint.password_usage":                "使用: echo <密码> | %s encrypt ... --password-stdin",
+		"usage.title":                        "\n用法:\n  minicipher encrypt <input_file> <output_file> [选项]\n  minicipher decrypt <input_file> <output_file> [选项]\n  minicipher batch encrypt <input_dir> <output_dir> [选项]\n  minicipher batch decrypt <input_dir> <output_dir> [选项]\n  minicipher test\n\n加密选项:\n  --algo=AES256|OTP        加密算法 (默认: 配置文件设置)\n  --key-type=random|password  密钥类型 (默认: 配置文件设置)\n  --password-stdin          从标准输入读取密码 (推荐)\n  --password-env=VAR        从环境变量读取密码 (例如 --password-env=MINICIPHER_PASSWORD)\n\n解密选项:\n  --key-file=<path>         密钥文件路径\n  --password-stdin          从标准输入读取密码\n  --password-env=VAR        从环境变量读取密码\n\n批量选项:\n  --mode=recursive|folder|files  处理模式 (默认: recursive)\n  --preserve-structure      保持目录结构\n  --parallel                启用并行处理\n  --max-threads=<n>         最大线程数 (默认: 4)\n\n密码安全说明:\n  推荐使用 --password-stdin 或环境变量方式提供密码，\n  避免密码出现在命令行参数中（命令行参数会被记录到 shell 历史）。\n  也可以通过设置环境变量 MINICIPHER_PASSWORD 来提供密码。\n\n示例:\n  # 加密（推荐：stdin 密码）\n  echo \"MySecret123\" | minicipher encrypt secret.txt secret.txt.enc --key-type=password --password-stdin\n\n  # 加密（环境变量密码）\n  MINICIPHER_PASSWORD=MySecret123 minicipher encrypt secret.txt secret.txt.enc --key-type=password --password-env=MINICIPHER_PASSWORD\n\n  # 加密（随机密钥 - 无需密码）\n  minicipher encrypt doc.pdf doc.pdf.enc --algo=AES256 --key-type=random\n\n  # OTP 加密\n  minicipher encrypt data.bin data.bin.enc --algo=OTP\n\n  # 解密\n  echo \"MySecret123\" | minicipher decrypt secret.txt.enc output.txt --password-stdin\n  minicipher decrypt doc.pdf.enc output.pdf --key-file=doc.pdf.enc.key\n\n  # 批量加密\n  minicipher batch encrypt ./docs ./encrypted --mode=recursive --preserve-structure\n",
 
 		// 设置对话框
 		"tab.general":                        "常规",
@@ -181,6 +212,7 @@ var defaultTranslations = TranslationMap{
 		"batch.decrypt":                      "Batch Decrypt",
 		"batch.cancel":                       "Cancel",
 		"batch.progress":                     "Progress",
+		"batch.progress.status":              "%s: %d/%d - %s",
 		"status.ready":                       "Ready",
 		"status.encrypting":                  "Encrypting...",
 		"status.decrypting":                  "Decrypting...",
@@ -212,10 +244,27 @@ var defaultTranslations = TranslationMap{
 		"error.no_key":                       "Key file required",
 		"error.no_password":                  "Password mode requires a password",
 		"error.need_both_dirs":               "Please select input and output directories",
+		"error.input_file_missing":           "Error: input file not found: %s",
+		"error.output_dir_missing":           "Error: output directory not found: %s",
 		"success.encryption":                 "✅ Encryption successful!\nAlgorithm: %s\nOutput file: %s",
 		"success.decryption":                 "✅ Decryption successful!\nAlgorithm: %s\nOutput file: %s",
 		"success.encryption_with_key":        "✅ Encryption successful!\nKey file: %s (keep it safe!)",
+		"success.encryption_stat":            "✅ Encryption successful!\nOutput file: %s",
+		"success.decryption_stat":            "✅ Decryption successful!\nOutput file: %s",
+		"success.batch_result":               "✅ %d/%d succeeded, %d failed, elapsed %s (%.1f%%)",
 		"key_save_failed":                    "⚠️ Key save failed: %v",
+		"warn.key_save":                      "Warning: failed to save key file: %v",
+		"error.config_load":                  "Failed to load config: %v",
+		"error.unknown_command":              "Unknown command: %s",
+		"error.missing_args":                 "Error: input and output file paths required",
+		"error.missing_encrypt_args":         "Error: input and output file paths required",
+		"error.algo_not_supported":           "Unsupported algorithm: %s",
+		"error.password_stdin":               "Failed to read password from stdin: %v",
+		"error.password_env_empty":           "Environment variable %s is empty or not set",
+		"warn.password_cli":                  "⚠️  Warning: using --password= flag exposes the password in shell history.",
+		"warn.password_cli_hint":             "   Use --password-stdin or --password-env=MINICIPHER_PASSWORD instead",
+		"hint.password_usage":                "Usage: echo <password> | %s encrypt ... --password-stdin",
+		"usage.title":                        "\nUsage:\n  minicipher encrypt <input_file> <output_file> [options]\n  minicipher decrypt <input_file> <output_file> [options]\n  minicipher batch encrypt <input_dir> <output_dir> [options]\n  minicipher batch decrypt <input_dir> <output_dir> [options]\n  minicipher test\n\nEncrypt options:\n  --algo=AES256|OTP        Encryption algorithm (default: config setting)\n  --key-type=random|password  Key type (default: config setting)\n  --password-stdin          Read password from stdin (recommended)\n  --password-env=VAR        Read password from env var (e.g. --password-env=MINICIPHER_PASSWORD)\n\nDecrypt options:\n  --key-file=<path>         Key file path\n  --password-stdin          Read password from stdin\n  --password-env=VAR        Read password from env var\n\nBatch options:\n  --mode=recursive|folder|files  Processing mode (default: recursive)\n  --preserve-structure      Preserve directory structure\n  --parallel                Enable parallel processing\n  --max-threads=<n>         Max threads (default: 4)\n\nPassword security:\n  Use --password-stdin or environment variable to provide password,\n  avoid passwords in command line arguments (they get logged in shell history).\n  You can also set the MINICIPHER_PASSWORD environment variable.\n\nExamples:\n  # Encrypt (recommended: stdin password)\n  echo \"MySecret123\" | minicipher encrypt secret.txt secret.txt.enc --key-type=password --password-stdin\n\n  # Encrypt (env var password)\n  MINICIPHER_PASSWORD=MySecret123 minicipher encrypt secret.txt secret.txt.enc --key-type=password --password-env=MINICIPHER_PASSWORD\n\n  # Encrypt (random key - no password needed)\n  minicipher encrypt doc.pdf doc.pdf.enc --algo=AES256 --key-type=random\n\n  # OTP encrypt\n  minicipher encrypt data.bin data.bin.enc --algo=OTP\n\n  # Decrypt\n  echo \"MySecret123\" | minicipher decrypt secret.txt.enc output.txt --password-stdin\n  minicipher decrypt doc.pdf.enc output.pdf --key-file=doc.pdf.enc.key\n\n  # Batch encrypt\n  minicipher batch encrypt ./docs ./encrypted --mode=recursive --preserve-structure\n",
 
 		// Settings dialog
 		"tab.general":                        "General",

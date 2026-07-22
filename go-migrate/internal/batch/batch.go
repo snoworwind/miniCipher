@@ -50,6 +50,20 @@ type BatchResult struct {
 	StartTime      time.Time
 	EndTime        time.Time
 	FileResults    []FileResult
+	mu             sync.Mutex // 保护 FileResults 切片
+}
+
+// AddResult 线程安全地添加一个结果
+func (r *BatchResult) AddResult(fr FileResult) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if fr.Success {
+		r.SuccessFiles++
+		r.ProcessedBytes += fr.FileSize
+	} else {
+		r.FailedFiles++
+	}
+	r.FileResults = append(r.FileResults, fr)
 }
 
 // Progress 进度信息
@@ -62,16 +76,22 @@ type Progress struct {
 	Done          bool
 }
 
+// Clone 深拷贝一个 FileResult（避免并发读时底层 slice 被修改）
+func (p Progress) Clone() Progress {
+	return p
+}
+
 // BatchProcessor 批量处理器
 type BatchProcessor struct {
 	maxWorkers     int
 	chunkSize      int
 	isCancelled    atomic.Bool
 	progressFn     func(Progress)
-	preserveStruct bool       // 是否保持目录结构
-	baseInputPath  string     // 基础输入路径（用于计算相对路径）
-	processMode    Mode       // 处理模式
+	preserveStruct bool          // 是否保持目录结构
+	baseInputPath  string        // 基础输入路径（用于计算相对路径）
+	processMode    Mode          // 处理模式
 	opType         OperationType // 操作类型
+	mu             sync.Mutex    // 保护非原子字段
 }
 
 // New 创建批量处理器
@@ -90,6 +110,8 @@ func New(maxWorkers int, chunkSizeMB int) *BatchProcessor {
 
 // SetProgressCallback 设置进度回调
 func (bp *BatchProcessor) SetProgressCallback(fn func(Progress)) {
+	bp.mu.Lock()
+	defer bp.mu.Unlock()
 	bp.progressFn = fn
 }
 
@@ -104,9 +126,11 @@ func (bp *BatchProcessor) Process(op OperationType, mode Mode, paths []string, o
 	key, password, iv, tag, salt []byte) (*BatchResult, error) {
 
 	bp.isCancelled.Store(false)
+	bp.mu.Lock()
 	bp.preserveStruct = preserveStructure
 	bp.opType = op
 	bp.processMode = mode
+	bp.mu.Unlock()
 
 	// 确定基础路径（用于保持目录结构）
 	if preserveStructure && len(paths) > 0 {
@@ -144,7 +168,6 @@ func (bp *BatchProcessor) Process(op OperationType, mode Mode, paths []string, o
 		path  string
 	}
 	taskCh := make(chan task, len(files))
-	var mu sync.Mutex
 
 	var wgProgress sync.WaitGroup
 	wgProgress.Add(1)
@@ -153,11 +176,14 @@ func (bp *BatchProcessor) Process(op OperationType, mode Mode, paths []string, o
 		var current int
 		for p := range progressCh {
 			current++
-			if bp.progressFn != nil {
+			bp.mu.Lock()
+			cb := bp.progressFn
+			bp.mu.Unlock()
+			if cb != nil {
 				p.CurrentFile = current
 				p.TotalFiles = len(files)
 				p.TotalSize = totalSize
-				bp.progressFn(p)
+				cb(p.Clone())
 			}
 		}
 	}()
@@ -197,16 +223,10 @@ func (bp *BatchProcessor) Process(op OperationType, mode Mode, paths []string, o
 					}
 				}
 
-				mu.Lock()
-				if fr.Success {
-					result.SuccessFiles++
-					result.ProcessedBytes += fr.FileSize
-				} else {
-					result.FailedFiles++
-				}
-				result.FileResults = append(result.FileResults, fr)
-				mu.Unlock()
+				// 在线程安全的 AddResult 之前发送进度，避免持有锁时发送 channel
+				result.AddResult(fr)
 
+				// 发送进度（不持有锁）
 				progressCh <- Progress{
 					CurrentName:   filepath.Base(t.path),
 					ProcessedSize: fr.FileSize,
@@ -227,8 +247,11 @@ func (bp *BatchProcessor) Process(op OperationType, mode Mode, paths []string, o
 
 	result.EndTime = time.Now()
 
-	if bp.progressFn != nil {
-		bp.progressFn(Progress{Done: true, TotalFiles: len(files), CurrentFile: len(files)})
+	bp.mu.Lock()
+	cb := bp.progressFn
+	bp.mu.Unlock()
+	if cb != nil {
+		cb(Progress{Done: true, TotalFiles: len(files), CurrentFile: result.SuccessFiles})
 	}
 
 	return result, nil
@@ -239,7 +262,7 @@ func (bp *BatchProcessor) collectFiles(paths []string, op OperationType) ([]stri
 	var files []string
 	var totalSize int64
 
-	// 排除扩展名和文件名
+	// 排除扩展名和文件名（仅排除明确的临时文件和系统文件）
 	excludeExtensions := map[string]bool{
 		".tmp": true, ".temp": true, ".swp": true, ".DS_Store": true, ".lnk": true,
 	}
@@ -247,13 +270,12 @@ func (bp *BatchProcessor) collectFiles(paths []string, op OperationType) ([]stri
 		"thumbs.db": true, ".gitignore": true,
 	}
 
-	// 根据操作类型添加额外排除条件
+	// 根据操作类型添加额外排除条件：只排除密钥文件本身，不排除正常数据文件
 	if op == OpDecrypt {
 		excludeExtensions[".key"] = true
-		excludeExtensions[".txt"] = true
-		excludeExtensions[".bin"] = true
 	} else {
 		excludeExtensions[".enc"] = true
+		excludeExtensions[".key"] = true // 加密时不处理密钥文件
 	}
 
 	for _, path := range paths {
@@ -271,7 +293,6 @@ func (bp *BatchProcessor) collectFiles(paths []string, op OperationType) ([]stri
 					// ModeFolder：只处理一级子文件，不递归
 					if bp.processMode == ModeFolder {
 						parentDir := filepath.Dir(p)
-						// 只接受直接子文件（父目录 == path）
 						if parentDir != path {
 							return nil
 						}
@@ -288,7 +309,6 @@ func (bp *BatchProcessor) collectFiles(paths []string, op OperationType) ([]stri
 				})
 			}
 		} else {
-			// ModeFiles 或 ModeFolder* 下的单个文件路径
 			if bp.shouldIncludeFile(path, info, op, excludeExtensions, excludeNames) {
 				files = append(files, path)
 				totalSize += info.Size()
@@ -297,7 +317,6 @@ func (bp *BatchProcessor) collectFiles(paths []string, op OperationType) ([]stri
 	}
 
 	// 按文件大小降序排序（大文件优先，有助于并行处理）
-	// 先缓存文件大小避免在 sort 比较时重复 stat
 	type fileWithSize struct {
 		path string
 		size int64
@@ -362,9 +381,7 @@ func (bp *BatchProcessor) shouldIncludeFile(path string, info os.FileInfo, op Op
 	return true
 }
 
-
-// buildOutputPath 计算输出文件路径（修复版）
-// 与 Python 的 _calculate_output_path 一致
+// buildOutputPath 计算输出文件路径
 func (bp *BatchProcessor) buildOutputPath(inputPath, outputDir string, op OperationType) string {
 	baseName := filepath.Base(inputPath)
 	name, ext := filepathBaseExt(baseName)
@@ -385,7 +402,7 @@ func (bp *BatchProcessor) buildOutputPath(inputPath, outputDir string, op Operat
 	}
 
 	if bp.preserveStruct && bp.baseInputPath != "" {
-		// 使用 relpath 计算相对路径（与 Python 一致）
+		// 使用 relpath 计算相对路径
 		inputDir := filepath.Dir(inputPath)
 		relPath, err := filepath.Rel(bp.baseInputPath, inputDir)
 		if err == nil && relPath != "." {
@@ -400,7 +417,7 @@ func (bp *BatchProcessor) buildOutputPath(inputPath, outputDir string, op Operat
 	return filepath.Join(outputDir, outputName)
 }
 
-// filepathBaseExt 获取文件名和扩展名（与 Python 的 os.path.splitext 行为一致）
+// filepathBaseExt 获取文件名和扩展名
 func filepathBaseExt(filename string) (string, string) {
 	ext := filepath.Ext(filename)
 	name := filename[:len(filename)-len(ext)]
@@ -408,7 +425,6 @@ func filepathBaseExt(filename string) (string, string) {
 }
 
 // findMatchingKeyFile 查找与输入文件匹配的密钥文件
-// 与 Python BatchCipher._find_matching_key_file 一致
 func findMatchingKeyFile(inputPath, outputDir, algorithm string, keyType crypto.KeyType) string {
 	baseName := filepath.Base(inputPath)
 
@@ -436,23 +452,18 @@ func findMatchingKeyFile(inputPath, outputDir, algorithm string, keyType crypto.
 		}
 
 		if algorithm == "OTP" {
-			// 新格式（包含完整文件名）
+			// 使用 BuildKeyFilePath 生成标准路径
 			possibleKeyFiles = append(possibleKeyFiles,
-				filepath.Join(searchDir, "key_"+originalName+".txt"),
-				filepath.Join(searchDir, "key_"+originalName+".bin"),
-				filepath.Join(searchDir, "key_"+originalName+".key"),
-			)
-			// 旧格式（不含扩展名）
-			possibleKeyFiles = append(possibleKeyFiles,
-				filepath.Join(searchDir, "key_"+baseNameNoExt+".txt"),
-				filepath.Join(searchDir, "key_"+baseNameNoExt+".bin"),
-				filepath.Join(searchDir, "key_"+baseNameNoExt+".key"),
+				crypto.BuildKeyFilePath(searchDir, originalName, crypto.AlgorithmOTP, crypto.KeyTypeRandom, "hex"),
+				crypto.BuildKeyFilePath(searchDir, originalName, crypto.AlgorithmOTP, crypto.KeyTypeRandom, "binary"),
+				crypto.BuildKeyFilePath(searchDir, baseNameNoExt, crypto.AlgorithmOTP, crypto.KeyTypeRandom, "hex"),
+				crypto.BuildKeyFilePath(searchDir, baseNameNoExt, crypto.AlgorithmOTP, crypto.KeyTypeRandom, "binary"),
 			)
 		} else if keyType == crypto.KeyTypeRandom {
-			// AES 随机密钥模式：显式添加命名模式（与 Python 一致）
+			// AES 随机密钥模式
 			possibleKeyFiles = append(possibleKeyFiles,
-				filepath.Join(searchDir, "key_"+originalName+".key"),
-				filepath.Join(searchDir, "key_"+baseNameNoExt+".key"),
+				crypto.BuildKeyFilePath(searchDir, originalName, crypto.AlgorithmAES256, crypto.KeyTypeRandom, ""),
+				crypto.BuildKeyFilePath(searchDir, baseNameNoExt, crypto.AlgorithmAES256, crypto.KeyTypeRandom, ""),
 			)
 		}
 
@@ -540,30 +551,23 @@ func (bp *BatchProcessor) encryptFile(inputPath, outputPath string,
 
 	switch algo {
 	case "OTP":
-		otp := crypto.NewOTPAlgorithm()
-		result, err := otp.EncryptToFile(inputPath, outputPath, bp.chunkSize)
-		if err != nil {
-			return err
-		}
-		// 保存 OTP 密钥文件（使用与 Python 一致的格式：key_<完整文件名>.txt hex编码）
+		// OTP 流式加密：使用 BuildKeyFilePath 生成统一路径
 		baseName := filepath.Base(inputPath)
-		keyPath := filepath.Join(filepath.Dir(outputPath), "key_"+baseName+".txt")
-		hexKey := fmt.Sprintf("%x", result.Key)
-		if err := os.WriteFile(keyPath, []byte(hexKey), 0600); err != nil {
-			return fmt.Errorf("保存OTP密钥文件失败: %w", err)
-		}
-		return nil
+		keyPath := crypto.BuildKeyFilePath(filepath.Dir(outputPath), baseName, crypto.AlgorithmOTP, crypto.KeyTypeRandom, "hex")
+		otp := crypto.NewOTPAlgorithm()
+		_, err := otp.EncryptToFile(inputPath, outputPath, keyPath, bp.chunkSize)
+		return err
 	case "AES256":
 		aes := crypto.NewAES256Algorithm()
 		result, err := aes.EncryptToFile(inputPath, outputPath, keyType, password, salt, bp.chunkSize)
 		if err != nil {
 			return err
 		}
-		// 保存 AES 随机密钥文件（与 Python 兼容的纯二进制格式）
+		// 保存 AES 随机密钥文件（完整格式：key + iv + tag）
 		if keyType == crypto.KeyTypeRandom {
 			baseName := filepath.Base(inputPath)
-			keyPath := filepath.Join(filepath.Dir(outputPath), "key_"+baseName+".key")
-			if err := crypto.SaveKeyFile(keyPath, result.Key); err != nil {
+			keyPath := crypto.BuildKeyFilePath(filepath.Dir(outputPath), baseName, crypto.AlgorithmAES256, crypto.KeyTypeRandom, "")
+			if err := crypto.SaveKeyFileWithIVTag(keyPath, result.Key, result.IV, result.Tag); err != nil {
 				return fmt.Errorf("保存AES密钥文件失败: %w", err)
 			}
 		}
@@ -580,12 +584,9 @@ func (bp *BatchProcessor) decryptFile(inputPath, outputPath, keyPath string,
 		if keyPath == "" {
 			return fmt.Errorf("OTP解密需要密钥文件")
 		}
-		otpKey, err := crypto.LoadKey(keyPath)
-		if err != nil {
-			return fmt.Errorf("读取OTP密钥文件失败: %w", err)
-		}
+		// OTP 流式解密：分块读取密钥文件，不加载完整密钥到内存
 		otp := crypto.NewOTPAlgorithm()
-		_, err = otp.DecryptFromFile(inputPath, outputPath, otpKey, bp.chunkSize)
+		_, err := otp.DecryptFromFile(inputPath, outputPath, keyPath, bp.chunkSize)
 		return err
 	case "AES256":
 		aes := crypto.NewAES256Algorithm()
@@ -596,7 +597,7 @@ func (bp *BatchProcessor) decryptFile(inputPath, outputPath, keyPath string,
 		if keyPath == "" {
 			return fmt.Errorf("AES解密需要密钥文件")
 		}
-		// 智能加载密钥
+		// 智能加载密钥（支持纯key和完整格式）
 		aesKey, aesIV, aesTag, err := crypto.LoadKeyWithIVTag(keyPath)
 		if err != nil {
 			// 回退到纯key格式
@@ -640,7 +641,7 @@ func (r *BatchResult) AverageSpeed() float64 {
 	return float64(r.ProcessedBytes) / elapsed
 }
 
-// StatisticsReport 生成统计报告（与 Python _generate_statistics_report 一致）
+// StatisticsReport 生成统计报告
 func (r *BatchResult) StatisticsReport() string {
 	elapsed := r.Duration()
 	minutes := int(elapsed.Minutes())

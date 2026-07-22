@@ -1,56 +1,58 @@
-.PHONY: build test clean build-all build-macos build-windows build-linux install-deps-linux
+.PHONY: build build-cli build-gui test clean run-cli run-gui lint
 
-APP_NAME=minicipher
-BUILD_DIR=dist
-LDFLAGS=-s -w
+# 默认目标
+all: build
 
-build:
-	go build -o $(APP_NAME) -ldflags "$(LDFLAGS)" ./cmd/minicipher/
+# 构建所有
+build: build-cli
 
+# 构建 CLI
+build-cli:
+	cd cmd/minicipher && go build -o ../../bin/minicipher .
+
+# 构建 GUI
+build-gui:
+	cd cmd/gui && go build -o ../../bin/minicipher-gui .
+
+# 运行 CLI 帮助
+run-cli: build-cli
+	./bin/minicipher help
+
+# 运行 CLI 测试
+run-test: build-cli
+	./bin/minicipher test
+
+# 运行单元测试
 test:
-	go run ./cmd/minicipher/ test
+	go test ./internal/... -v -count=1
 
-clean:
-	rm -f $(APP_NAME)
-	rm -rf $(BUILD_DIR)
-
-# 跨平台构建
-build-macos-arm64:
-	GOOS=darwin GOARCH=arm64 go build -o $(BUILD_DIR)/$(APP_NAME)-macos-arm64 -ldflags "$(LDFLAGS)" ./cmd/minicipher/
-
-build-macos-amd64:
-	GOOS=darwin GOARCH=amd64 go build -o $(BUILD_DIR)/$(APP_NAME)-macos-amd64 -ldflags "$(LDFLAGS)" ./cmd/minicipher/
-
-build-windows:
-	GOOS=windows GOARCH=amd64 go build -o $(BUILD_DIR)/$(APP_NAME)-windows-amd64.exe -ldflags "$(LDFLAGS)" ./cmd/minicipher/
-
-build-linux:
-	GOOS=linux GOARCH=amd64 go build -o $(BUILD_DIR)/$(APP_NAME)-linux-amd64 -ldflags "$(LDFLAGS)" ./cmd/minicipher/
-
-# 构建所有平台
-build-all: clean
-	mkdir -p $(BUILD_DIR)
-	$(MAKE) build-macos-arm64
-	$(MAKE) build-macos-amd64
-	$(MAKE) build-windows
-	$(MAKE) build-linux
-	@echo ""
-	@echo "构建完成! 产物在 $(BUILD_DIR)/ 目录:"
-	@ls -lh $(BUILD_DIR)/
-
-# 本地运行
-run:
-	go run ./cmd/minicipher/
-
-# 格式化代码
-fmt:
-	go fmt ./...
+# 运行测试并显示覆盖率
+test-cover:
+	go test ./internal/... -v -cover -coverprofile=coverage.out
+	go tool cover -html=coverage.out -o coverage.html
 
 # 代码检查
-vet:
+lint:
 	go vet ./...
+	go fmt ./...
 
-# 安装 Linux 系统依赖 (Fyne GUI 构建需要)
-install-deps-linux:
-	sudo apt-get update
-	sudo apt-get install -y libgl1-mesa-dev xorg-dev libwayland-dev libxkbcommon-dev
+# 下载依赖
+deps:
+	go mod download
+	go mod tidy
+
+# 清理
+clean:
+	rm -rf bin/
+	go clean -cache -testcache
+
+# 安装到 GOPATH/bin
+install: build-cli
+	cp bin/minicipher $(shell go env GOPATH)/bin/minicipher
+
+# 交叉编译
+build-all:
+	GOOS=darwin GOARCH=amd64 go build -o bin/minicipher-darwin-amd64 ./cmd/minicipher/
+	GOOS=darwin GOARCH=arm64 go build -o bin/minicipher-darwin-arm64 ./cmd/minicipher/
+	GOOS=linux GOARCH=amd64 go build -o bin/minicipher-linux-amd64 ./cmd/minicipher/
+	GOOS=windows GOARCH=amd64 go build -o bin/minicipher-windows-amd64.exe ./cmd/minicipher/

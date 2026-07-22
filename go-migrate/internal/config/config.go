@@ -10,12 +10,12 @@ import (
 
 // Config 应用配置
 type Config struct {
-	Version string         `json:"version"`
-	UI      UIConfig       `json:"ui"`
-	Crypto  CryptoConfig   `json:"crypto"`
-	Paths   PathsConfig    `json:"paths"`
-	Batch   BatchConfig    `json:"batch"`
-	Debug   bool           `json:"debug"`
+	Version  string         `json:"version"`
+	UI       UIConfig       `json:"ui"`
+	Crypto   CryptoConfig   `json:"crypto"`
+	Paths    PathsConfig    `json:"paths"`
+	Batch    BatchConfig    `json:"batch"`
+	Debug    bool           `json:"debug"`
 	Advanced AdvancedConfig `json:"advanced"`
 }
 
@@ -100,6 +100,7 @@ func NewManager() *Manager {
 }
 
 // Load 加载配置（如果不存在则使用默认配置）
+// 采用深度合并策略：先用默认配置填充，再用文件内容覆盖非零字段
 func (m *Manager) Load() (*Config, error) {
 	configDir, err := getConfigDir()
 	if err != nil {
@@ -127,8 +128,9 @@ func (m *Manager) Load() (*Config, error) {
 		return nil, fmt.Errorf("读取配置文件失败: %w", err)
 	}
 
+	// 深度合并：先设置默认值，再应用文件中的非零值
 	config := DefaultConfig()
-	if err := json.Unmarshal(data, config); err != nil {
+	if err := deepMergeJSON(config, data); err != nil {
 		// 配置文件损坏，使用默认配置
 		m.config = DefaultConfig()
 		m.Save()
@@ -136,7 +138,135 @@ func (m *Manager) Load() (*Config, error) {
 	}
 
 	m.config = config
+
+	// 验证配置
+	if err := ValidateConfig(config); err != nil {
+		// 配置无效，使用默认配置
+		m.config = DefaultConfig()
+		m.Save()
+		return m.config, nil
+	}
+
 	return config, nil
+}
+
+// deepMergeJSON 深度合并 JSON 数据到配置结构体
+// 先用默认配置值填充，再解析 JSON 并只覆盖文件中明确指定的字段
+func deepMergeJSON(config *Config, data []byte) error {
+	// 先解析到临时 map 中检查哪些字段存在
+	var raw map[string]json.RawMessage
+	if err := json.Unmarshal(data, &raw); err != nil {
+		return err
+	}
+
+	// 仅当版本字段存在时覆盖
+	if v, ok := raw["version"]; ok {
+		json.Unmarshal(v, &config.Version)
+	}
+	if v, ok := raw["debug"]; ok {
+		json.Unmarshal(v, &config.Debug)
+	}
+
+	// UI 子配置合并
+	if uiRaw, ok := raw["ui"]; ok {
+		var ui UIConfig
+		if json.Unmarshal(uiRaw, &ui) == nil {
+			if ui.Language != "" {
+				config.UI.Language = ui.Language
+			}
+			if ui.Theme != "" {
+				config.UI.Theme = ui.Theme
+			}
+		}
+	}
+
+	// Crypto 子配置合并
+	if cryptoRaw, ok := raw["crypto"]; ok {
+		var c CryptoConfig
+		if json.Unmarshal(cryptoRaw, &c) == nil {
+			if c.DefaultAlgorithm != "" {
+				config.Crypto.DefaultAlgorithm = c.DefaultAlgorithm
+			}
+			if c.DefaultKeyType != "" {
+				config.Crypto.DefaultKeyType = c.DefaultKeyType
+			}
+			if c.PasswordMinLength > 0 {
+				config.Crypto.PasswordMinLength = c.PasswordMinLength
+			}
+			// RequireStrongPass 是 bool 型，需要特殊处理
+			// 注意：bool 零值是 false，无法区分"未设置"和"设置为 false"
+			var cryptoMap map[string]json.RawMessage
+			if json.Unmarshal(cryptoRaw, &cryptoMap) == nil {
+				if _, exists := cryptoMap["require_strong_password"]; exists {
+					config.Crypto.RequireStrongPass = c.RequireStrongPass
+				}
+			}
+			if c.OTPKeyFormat != "" {
+				config.Crypto.OTPKeyFormat = c.OTPKeyFormat
+			}
+		}
+	}
+
+	// Paths 子配置合并
+	if pathsRaw, ok := raw["paths"]; ok {
+		var p PathsConfig
+		if json.Unmarshal(pathsRaw, &p) == nil {
+			if p.DefaultInputDir != "" {
+				config.Paths.DefaultInputDir = p.DefaultInputDir
+			}
+			if p.DefaultOutputDir != "" {
+				config.Paths.DefaultOutputDir = p.DefaultOutputDir
+			}
+			// RememberLastFolder 是 bool 型
+			var pathsMap map[string]json.RawMessage
+			if json.Unmarshal(pathsRaw, &pathsMap) == nil {
+				if _, exists := pathsMap["remember_last_folder"]; exists {
+					config.Paths.RememberLastFolder = p.RememberLastFolder
+				}
+			}
+			if p.LastInputFolder != "" {
+				config.Paths.LastInputFolder = p.LastInputFolder
+			}
+			if p.LastOutputFolder != "" {
+				config.Paths.LastOutputFolder = p.LastOutputFolder
+			}
+		}
+	}
+
+	// Batch 子配置合并
+	if batchRaw, ok := raw["batch"]; ok {
+		var b BatchConfig
+		if json.Unmarshal(batchRaw, &b) == nil {
+			// 区分未设置和设置为 false
+			var batchMap map[string]json.RawMessage
+			if json.Unmarshal(batchRaw, &batchMap) == nil {
+				if _, exists := batchMap["parallel_processing"]; exists {
+					config.Batch.ParallelProcessing = b.ParallelProcessing
+				}
+				if _, exists := batchMap["preserve_structure"]; exists {
+					config.Batch.PreserveStructure = b.PreserveStructure
+				}
+			}
+			if b.MaxThreads > 0 {
+				config.Batch.MaxThreads = b.MaxThreads
+			}
+		}
+	}
+
+	// Advanced 子配置合并
+	if advRaw, ok := raw["advanced"]; ok {
+		var a AdvancedConfig
+		if json.Unmarshal(advRaw, &a) == nil {
+			if a.BufferSize > 0 {
+				config.Advanced.BufferSize = a.BufferSize
+			}
+			if a.LogLevel != "" {
+				config.Advanced.LogLevel = a.LogLevel
+			}
+		}
+	}
+
+	return nil
 }
 
 // Save 保存配置
@@ -159,6 +289,11 @@ func (m *Manager) Save() error {
 // Get 获取当前配置
 func (m *Manager) Get() *Config {
 	return m.config
+}
+
+// Replace 替换当前配置（线程安全，用于设置对话框）
+func (m *Manager) Replace(newConfig *Config) {
+	m.config = newConfig
 }
 
 // GetDefaultAlgorithm 获取默认算法

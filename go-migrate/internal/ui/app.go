@@ -3,7 +3,6 @@ package ui
 import (
 	"fmt"
 	"image/color"
-	"os"
 	"path/filepath"
 	"strconv"
 	"time"
@@ -255,7 +254,6 @@ func (a *App) browseFile(entry *widget.Entry) {
 		if r != nil {
 			path := r.URI().Path()
 			entry.SetText(path)
-			// 保存最后使用的文件夹（与 Python 一致）
 			if a.cfg.Paths.RememberLastFolder {
 				a.cfg.Paths.LastInputFolder = filepath.Dir(path)
 				a.cfgMgr.Save()
@@ -269,7 +267,6 @@ func (a *App) browseDir(entry *widget.Entry) {
 		if u != nil {
 			path := u.Path()
 			entry.SetText(path)
-			// 保存最后使用的文件夹（与 Python 一致）
 			if a.cfg.Paths.RememberLastFolder {
 				a.cfg.Paths.LastOutputFolder = path
 				a.cfgMgr.Save()
@@ -356,43 +353,40 @@ func (a *App) doEncrypt() {
 		}
 
 		resp, err := fc.EncryptFile(crypto.EncryptionRequest{
-			InputPath:  inputFile,
-			OutputPath: outputFile,
-			Algorithm:  algoType,
-			KeyType:    kt,
-			Password:   password,
+			InputPath:    inputFile,
+			OutputPath:   outputFile,
+			Algorithm:    algoType,
+			KeyType:      kt,
+			Password:     password,
+			OtpKeyFormat: a.cfg.Crypto.OTPKeyFormat,
+			ProgressFn: func(pct int, msg string) {
+				a.encStatusLabel.SetText(msg)
+				a.win.Canvas().Refresh(a.encStatusLabel)
+			},
 		})
 
 		if err != nil {
-			a.encStatusLabel.SetText(fmt.Sprintf("❌ %s", err.Error()))
+			a.encStatusLabel.SetText(a.tr.Tf("error.encryption_failed", err.Error()))
 			return
 		}
 
 		if resp.KeyFileNeeded {
 			baseName := filepath.Base(inputFile)
-			// 保存密钥（与 Python 兼容格式）
 			if algoType == crypto.AlgorithmOTP {
-				format := a.cfg.Crypto.OTPKeyFormat
-				if format == "" {
-					format = "hex"
-				}
-				keyFile, err := fc.SaveKey(resp.Key, outputDir, baseName, algoType, kt, format)
-				if err != nil {
-					a.encStatusLabel.SetText(fmt.Sprintf(a.tr.T("key_save_failed"), err))
-					return
-				}
-				a.encStatusLabel.SetText(fmt.Sprintf(a.tr.T("success.encryption_with_key"), keyFile))
+				// OTP 密钥文件已在加密过程中自动保存（内部调用 EncryptToFile 时已写入）
+				keyFile := crypto.BuildKeyFilePath(outputDir, baseName, crypto.AlgorithmOTP, crypto.KeyTypeRandom, a.cfg.Crypto.OTPKeyFormat)
+				a.encStatusLabel.SetText(a.tr.Tf("success.encryption_with_key", keyFile))
 			} else {
 				// AES: 保存 key+iv+tag 完整格式
 				keyFile, err := fc.SaveAESKeyAll(resp.Key, resp.IV, resp.Tag, outputDir, baseName)
 				if err != nil {
-					a.encStatusLabel.SetText(fmt.Sprintf(a.tr.T("key_save_failed"), err))
+					a.encStatusLabel.SetText(a.tr.Tf("key_save_failed", err))
 					return
 				}
-				a.encStatusLabel.SetText(fmt.Sprintf(a.tr.T("success.encryption_with_key"), keyFile))
+				a.encStatusLabel.SetText(a.tr.Tf("success.encryption_with_key", keyFile))
 			}
 		} else {
-			a.encStatusLabel.SetText(fmt.Sprintf(a.tr.T("success.encryption"), algo, outputFile))
+			a.encStatusLabel.SetText(a.tr.Tf("success.encryption", algo, outputFile))
 		}
 	}()
 }
@@ -478,6 +472,10 @@ func (a *App) doDecrypt() {
 			Algorithm:  "", // 自动检测
 			KeyPath:    keyFilePath,
 			Password:   password,
+			ProgressFn: func(pct int, msg string) {
+				a.decStatusLabel.SetText(msg)
+				a.win.Canvas().Refresh(a.decStatusLabel)
+			},
 		}
 
 		if password != "" {
@@ -486,10 +484,10 @@ func (a *App) doDecrypt() {
 
 		_, err := fc.DecryptFile(req)
 		if err != nil {
-			a.decStatusLabel.SetText(fmt.Sprintf("❌ %s", err.Error()))
+			a.decStatusLabel.SetText(a.tr.Tf("error.decryption_failed", err.Error()))
 			return
 		}
-		a.decStatusLabel.SetText(fmt.Sprintf(a.tr.T("success.decryption"), "", outputFile))
+		a.decStatusLabel.SetText(a.tr.Tf("success.decryption", "", outputFile))
 	}()
 }
 
@@ -518,7 +516,7 @@ func (a *App) buildBatchPanel() fyne.CanvasObject {
 	})
 	a.batchCancelBtn.Disable()
 
-	// 处理模式选择器（与 Python 的 batch_mode_combo 一致）
+	// 处理模式选择器
 	a.batchModeSelect = widget.NewSelect([]string{
 		a.tr.T("batch.mode.files"),
 		a.tr.T("batch.mode.folder"),
@@ -649,7 +647,7 @@ func (a *App) doBatch(isEncrypt bool) {
 		}
 
 		elapsed := result.Duration().Round(time.Second)
-		a.batchStatusLabel.SetText(fmt.Sprintf("✅ %d/%d 成功, %d 失败, 耗时 %s (%.1f%%)",
+		a.batchStatusLabel.SetText(a.tr.Tf("success.batch_result",
 			result.SuccessFiles, result.TotalFiles, result.FailedFiles, elapsed, result.SuccessRate()))
 		a.batchProgress.SetValue(1)
 	}()
@@ -662,12 +660,12 @@ func (a *App) onBatchProgress(p batch.Progress) {
 	}
 	if p.TotalFiles > 0 {
 		a.batchProgress.SetValue(float64(p.CurrentFile) / float64(p.TotalFiles))
-		a.batchStatusLabel.SetText(fmt.Sprintf("%s: %d/%d - %s",
+		a.batchStatusLabel.SetText(a.tr.Tf("batch.progress.status",
 			a.tr.T("batch.progress"), p.CurrentFile, p.TotalFiles, p.CurrentName))
 	}
 }
 
-// safeRebuildUI 安全重建UI（保存/恢复用户输入，与 Python _reload_ui 一致）
+// safeRebuildUI 安全重建UI（保存/恢复用户输入）
 func (a *App) safeRebuildUI() {
 	// 保存当前输入值
 	savedEncInput := ""
@@ -764,6 +762,5 @@ func (a *App) applyFyneTheme() {
 	fyne.CurrentApp().Settings().SetTheme(&forcedTheme{variant: variant})
 }
 
-// 保留导入引用
+// Ensure app package is imported
 var _ = app.New
-var _ = os.Stdout
