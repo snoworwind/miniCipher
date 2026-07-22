@@ -3,12 +3,8 @@ name: CI Build (Go)
 on:
   push:
     branches: [ main ]
-    paths:
-      - 'go-migrate/**'
   pull_request:
     branches: [ main ]
-    paths:
-      - 'go-migrate/**'
   workflow_dispatch:
 
 jobs:
