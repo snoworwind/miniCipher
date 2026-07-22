@@ -53,4 +53,4 @@ vet:
 # 安装 Linux 系统依赖 (Fyne GUI 构建需要)
 install-deps-linux:
 	sudo apt-get update
-	sudo apt-get install -y libgl1-mesa-dev xorg-dev
+	sudo apt-get install -y libgl1-mesa-dev xorg-dev libwayland-dev libxkbcommon-dev
