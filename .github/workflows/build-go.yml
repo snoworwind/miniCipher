@@ -18,9 +18,6 @@ jobs:
           - os: macos-latest
             goarch: arm64
             output: minicipher-macos-arm64
-          - os: macos-13
-            goarch: amd64
-            output: minicipher-macos-amd64
           - os: windows-latest
             goarch: amd64
             output: minicipher-windows-amd64.exe
@@ -60,7 +57,7 @@ jobs:
 
       - name: Build
         env:
-          GOOS: ${{ matrix.os == 'windows-latest' && 'windows' || matrix.os == 'macos-latest' && 'darwin' || matrix.os == 'macos-13' && 'darwin' || 'linux' }}
+          GOOS: ${{ matrix.os == 'windows-latest' && 'windows' || matrix.os == 'macos-latest' && 'darwin' || 'linux' }}
           GOARCH: ${{ matrix.goarch }}
         run: |
           echo "Building for GOOS=${GOOS} GOARCH=${GOARCH}..."

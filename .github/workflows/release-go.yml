@@ -19,10 +19,6 @@ jobs:
             goarch: arm64
             output: minicipher-macos-arm64
             asset_name: minicipher-macos-arm64
-          - os: macos-13
-            goarch: amd64
-            output: minicipher-macos-amd64
-            asset_name: minicipher-macos-amd64
           - os: windows-latest
             goarch: amd64
             output: minicipher-windows-amd64.exe
@@ -58,7 +54,7 @@ jobs:
 
       - name: Build
         env:
-          GOOS: ${{ matrix.os == 'windows-latest' && 'windows' || matrix.os == 'macos-latest' && 'darwin' || matrix.os == 'macos-13' && 'darwin' || 'linux' }}
+          GOOS: ${{ matrix.os == 'windows-latest' && 'windows' || matrix.os == 'macos-latest' && 'darwin' || 'linux' }}
           GOARCH: ${{ matrix.goarch }}
         run: |
           mkdir -p dist
@@ -104,7 +100,6 @@ jobs:
             |------|------|
             | Linux (amd64) | `minicipher-linux-amd64` |
             | macOS (Apple Silicon) | `minicipher-macos-arm64` |
-            | macOS (Intel) | `minicipher-macos-amd64` |
             | Windows (amd64) | `minicipher-windows-amd64.exe` |
 
             ### 功能
