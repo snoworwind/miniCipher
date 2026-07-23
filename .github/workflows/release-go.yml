@@ -139,6 +139,9 @@ jobs:
             # Windows
             .\minicipher-windows-amd64.exe
             ```
+
+            ---
+            > 🤖 本项目完全由 AI 开发。
           files: |
             release-assets/**/minicipher-*
           draft: false
