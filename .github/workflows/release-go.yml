@@ -19,6 +19,7 @@ jobs:
             goarch: arm64
             output: minicipher-macos-arm64
             asset_name: minicipher-macos-arm64
+            dmg_name: MiniCipher-macOS-arm64.dmg
           - os: windows-latest
             goarch: amd64
             output: minicipher-windows-amd64.exe
@@ -69,7 +70,7 @@ jobs:
           go build -trimpath -o dist/${{ matrix.output }} -ldflags "$WFLAGS" ./cmd/minicipher/
 
       - name: Wrap macOS .app bundle
-        if: ${{ matrix.os == 'macos-latest' }}
+        if: matrix.os == 'macos-latest'
         shell: bash
         run: |
           mkdir -p "dist/MiniCipher.app/Contents/MacOS"
@@ -98,16 +99,32 @@ jobs:
           } > "dist/MiniCipher.app/Contents/Info.plist"
           echo "✅ macOS .app bundle created"
 
+      - name: Create macOS DMG
+        if: matrix.os == 'macos-latest'
+        shell: bash
+        run: |
+          hdiutil create -volname "MiniCipher" \
+            -srcfolder "dist/MiniCipher.app" \
+            -ov -format UDZO \
+            "dist/${{ matrix.dmg_name }}"
+          echo "✅ macOS DMG created at dist/${{ matrix.dmg_name }}"
+
       - name: Verify build
         run: ls -lh dist/
 
-      - name: Upload artifact
+      - name: Upload artifact (macOS DMG)
+        if: matrix.os == 'macos-latest'
         uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.asset_name }}
-          path: |
-            go-migrate/dist/${{ matrix.output }}
-            go-migrate/dist/MiniCipher.app/**
+          path: go-migrate/dist/${{ matrix.dmg_name }}
+
+      - name: Upload artifact (Linux/Windows binary)
+        if: matrix.os != 'macos-latest'
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.asset_name }}
+          path: go-migrate/dist/${{ matrix.output }}
 
   release:
     runs-on: ubuntu-latest
@@ -139,7 +156,7 @@ jobs:
             | 平台 | 文件 |
             |------|------|
             | Linux (amd64) | `minicipher-linux-amd64` |
-            | macOS (Apple Silicon) | `minicipher-macos-arm64` |
+            | macOS (Apple Silicon) | `MiniCipher-macOS-arm64.dmg` |
             | Windows (amd64) | `minicipher-windows-amd64.exe` |
 
             ### 功能
@@ -153,9 +170,12 @@ jobs:
             ### 使用方式
 
             ```bash
-            # Linux/macOS
-            chmod +x minicipher-*
+            # Linux
+            chmod +x minicipher-linux-amd64
             ./minicipher-linux-amd64
+
+            # macOS
+            双击 .dmg 挂载，将 MiniCipher.app 拖入 Applications 文件夹
 
             # Windows
             .\minicipher-windows-amd64.exe
@@ -164,8 +184,9 @@ jobs:
             ---
             > 🤖 本项目完全由 AI 开发。
           files: |
-            release-assets/**/minicipher-*
-            release-assets/**/MiniCipher.app/**
+            release-assets/**/minicipher-linux-amd64
+            release-assets/**/MiniCipher*.dmg
+            release-assets/**/minicipher-windows-amd64.exe
           draft: false
           prerelease: false
         env:
