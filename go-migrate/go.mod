@@ -1,6 +1,6 @@
 module github.com/snoworwind/minicipher
 
-go 1.25
+go 1.26.5
 
 require golang.org/x/crypto v0.54.0
 

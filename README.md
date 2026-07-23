@@ -1,7 +1,7 @@
 # miniCipher
 
 <div align="center">
-  <img src="https://img.shields.io/badge/Go-1.23%2B-00ADD8" alt="Go 1.23+">
+  <img src="https://img.shields.io/badge/Go-1.26%2B-00ADD8" alt="Go 1.26+">
   <img src="https://img.shields.io/badge/Fyne-v2.8-blue" alt="Fyne v2.8">
   <img src="https://img.shields.io/badge/Platform-Windows%20%7C%20macOS%20%7C%20Linux-green" alt="Cross-Platform">
   <img src="https://img.shields.io/badge/License-MIT-yellow" alt="MIT License">
@@ -52,7 +52,7 @@
 ### 从源码构建
 
 ```bash
-# 要求: Go 1.23+, GCC (Windows 需 MSYS2/MinGW-w64)
+# 要求: Go 1.26+, GCC (Windows 需 MSYS2/MinGW-w64)
 
 cd go-migrate
 
