@@ -39,7 +39,7 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
-          go-version: '1.23'
+          go-version: '1.25'
           cache: true
           cache-dependency-path: go-migrate/go.sum
 
@@ -68,6 +68,36 @@ jobs:
           fi
           go build -trimpath -o dist/${{ matrix.output }} -ldflags "$WFLAGS" ./cmd/minicipher/
 
+      - name: Wrap macOS .app bundle
+        if: ${{ matrix.os == 'macos-latest' }}
+        shell: bash
+        run: |
+          mkdir -p "dist/MiniCipher.app/Contents/MacOS"
+          mv "dist/${{ matrix.output }}" "dist/MiniCipher.app/Contents/MacOS/MiniCipher"
+          {
+            echo '<?xml version="1.0" encoding="UTF-8"?>'
+            echo '<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">'
+            echo '<plist version="1.0">'
+            echo '<dict>'
+            echo '    <key>CFBundleExecutable</key>'
+            echo '    <string>MiniCipher</string>'
+            echo '    <key>CFBundleIdentifier</key>'
+            echo '    <string>com.snoworwind.minicipher</string>'
+            echo '    <key>CFBundleName</key>'
+            echo '    <string>miniCipher</string>'
+            echo '    <key>CFBundleVersion</key>'
+            echo '    <string>2.1.0</string>'
+            echo '    <key>CFBundleShortVersionString</key>'
+            echo '    <string>2.1.0</string>'
+            echo '    <key>LSMinimumSystemVersion</key>'
+            echo '    <string>10.14</string>'
+            echo '    <key>NSHighResolutionCapable</key>'
+            echo '    <true/>'
+            echo '</dict>'
+            echo '</plist>'
+          } > "dist/MiniCipher.app/Contents/Info.plist"
+          echo "✅ macOS .app bundle created"
+
       - name: Verify build
         run: ls -lh dist/
 
@@ -75,7 +105,9 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.asset_name }}
-          path: go-migrate/dist/${{ matrix.output }}
+          path: |
+            go-migrate/dist/${{ matrix.output }}
+            go-migrate/dist/MiniCipher.app/**
 
   release:
     runs-on: ubuntu-latest
@@ -133,6 +165,7 @@ jobs:
             > 🤖 本项目完全由 AI 开发。
           files: |
             release-assets/**/minicipher-*
+            release-assets/**/MiniCipher.app/**
           draft: false
           prerelease: false
         env:
