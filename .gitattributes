@@ -1,0 +1,2 @@
+# Mark archived Python code as vendored so GitHub language stats reflect Go
+python-legacy/** linguist-vendored
