@@ -117,12 +117,10 @@ miniCipher/
 │   ├── build.bat                # Windows 构建脚本
 │   ├── Makefile                 # macOS / Linux 构建脚本
 │   └── go.mod / go.sum
-├── main.py                     # Python v1 实现（遗留）
+├── python-legacy/               # Python v1 实现（已归档）
 ├── .github/workflows/          # CI/CD
 │   ├── build-go.yml            # Go CI 构建
-│   ├── release-go.yml          # Go 自动发布
-│   ├── build.yml               # Python CI 构建
-│   └── release.yml             # Python 手动发布
+│   └── release-go.yml          # Go 自动发布
 └── README.md
 ```
 
