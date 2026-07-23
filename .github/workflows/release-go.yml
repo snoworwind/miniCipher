@@ -99,6 +99,13 @@ jobs:
           } > "dist/MiniCipher.app/Contents/Info.plist"
           echo "✅ macOS .app bundle created"
 
+      - name: Ad-hoc sign macOS .app
+        if: matrix.os == 'macos-latest'
+        shell: bash
+        run: |
+          codesign --force --deep --sign - "dist/MiniCipher.app"
+          echo "✅ macOS .app ad-hoc signed"
+
       - name: Create macOS DMG
         if: matrix.os == 'macos-latest'
         shell: bash
@@ -176,6 +183,7 @@ jobs:
 
             # macOS
             双击 .dmg 挂载，将 MiniCipher.app 拖入 Applications 文件夹
+            如提示"已损坏"，终端执行: xattr -cr /Applications/MiniCipher.app
 
             # Windows
             .\minicipher-windows-amd64.exe
