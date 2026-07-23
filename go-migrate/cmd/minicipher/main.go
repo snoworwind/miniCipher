@@ -9,11 +9,50 @@ import (
 	"strings"
 	"time"
 
+	"fyne.io/fyne/v2/app"
+
 	"github.com/snoworwind/minicipher/internal/batch"
 	"github.com/snoworwind/minicipher/internal/config"
 	"github.com/snoworwind/minicipher/internal/crypto"
 	"github.com/snoworwind/minicipher/internal/lang"
+	"github.com/snoworwind/minicipher/internal/platform"
+	"github.com/snoworwind/minicipher/internal/ui"
 )
+
+func main() {
+	// Detect mode: if arguments are provided, run CLI; otherwise run GUI
+	if len(os.Args) > 1 {
+		// CLI mode — attach to parent console (Windows) or use current terminal
+		platform.AttachOrAllocConsole()
+		runCLI()
+	} else {
+		// GUI mode — load config first to check debug setting
+		runGUI()
+	}
+}
+
+// ========== GUI mode ==========
+
+func runGUI() {
+	fApp := app.NewWithID("com.snoworwind.minicipher")
+	cfgMgr := config.NewManager()
+	cfg, err := cfgMgr.Load()
+	if err != nil {
+		cfg = config.DefaultConfig()
+	}
+
+	// If debug mode is enabled, open a console window (Windows only)
+	if cfg.Debug {
+		platform.AttachOrAllocConsole()
+		fmt.Println("[miniCipher] 调试模式已启用")
+		fmt.Printf("[miniCipher] 配置: %+v\n", cfg)
+	}
+
+	guiApp := ui.NewApp(cfgMgr, fApp)
+	guiApp.Run()
+}
+
+// ========== CLI mode (original minicipher CLI code, with fyne import removed from CLI path) ==========
 
 var (
 	cfgMgr     *config.Manager
@@ -21,7 +60,7 @@ var (
 	translator *lang.Translator
 )
 
-func main() {
+func runCLI() {
 	cfgMgr = config.NewManager()
 	var err error
 	cfg, err = cfgMgr.Load()
@@ -177,7 +216,6 @@ func handleEncrypt(args []string) {
 	switch algo {
 	case "OTP":
 		otp := crypto.NewOTPAlgorithm()
-		// 使用 BuildKeyFilePath 生成统一路径
 		outputDir := filepath.Dir(outputFile)
 		inputBase := filepath.Base(inputFile)
 		otpFormat := cfg.Crypto.OTPKeyFormat
@@ -201,7 +239,7 @@ func handleEncrypt(args []string) {
 
 	fmt.Println(translator.Tf("success.encryption_stat", outputFile))
 
-	// 保存密钥（随机密钥模式）
+	// Save key (random key mode)
 	if algo == "AES256" && kt == crypto.KeyTypeRandom {
 		keyFile := crypto.BuildKeyFilePath(filepath.Dir(outputFile), filepath.Base(inputFile), crypto.AlgorithmAES256, crypto.KeyTypeRandom, "")
 		if err := crypto.SaveKeyFileWithIVTag(keyFile, result.Key, result.IV, result.Tag); err != nil {
@@ -259,7 +297,7 @@ func handleDecrypt(args []string) {
 		os.Exit(1)
 	}
 
-	// 从文件头自动检测算法（只读4字节，避免大文件加载到内存）
+	// Auto-detect algorithm from file header (only read 4 bytes, avoid loading large files into memory)
 	algo := detectAlgorithmFromHeader(inputFile)
 
 	fmt.Printf("解密: %s -> %s\n", inputFile, outputFile)
@@ -274,7 +312,7 @@ func handleDecrypt(args []string) {
 			fmt.Fprintln(os.Stderr, translator.T("error.no_key"))
 			os.Exit(1)
 		}
-		// OTP 流式解密：分块读取密钥文件
+		// OTP streaming decrypt: read key file in chunks
 		otp := crypto.NewOTPAlgorithm()
 		_, decryptErr = otp.DecryptFromFile(inputFile, outputFile, keyFile, chunkSize)
 
@@ -284,10 +322,10 @@ func handleDecrypt(args []string) {
 			_, decryptErr = aes.DecryptFromFile(inputFile, outputFile,
 				crypto.KeyTypePassword, nil, nil, nil, []byte(password), nil, chunkSize)
 		} else if keyFile != "" {
-			// 智能加载 AES 密钥（兼容完整格式和纯key格式）
+			// Smart load AES key (compatible with full format and plain key format)
 			key, iv, tag, e := crypto.LoadKeyWithIVTag(keyFile)
 			if e != nil {
-				// 回退到纯key格式
+				// Fall back to plain key format
 				key, decryptErr = crypto.LoadKey(keyFile)
 				if decryptErr != nil {
 					fmt.Fprintf(os.Stderr, "%s\n", translator.Tf("error.decryption_failed", decryptErr.Error()))
@@ -315,7 +353,7 @@ func handleDecrypt(args []string) {
 	fmt.Println(translator.Tf("success.decryption_stat", outputFile))
 }
 
-// detectAlgorithmFromHeader 从文件头检测算法类型（只读4字节）
+// detectAlgorithmFromHeader detects algorithm type from file header (only reads 4 bytes)
 func detectAlgorithmFromHeader(filePath string) string {
 	f, err := os.Open(filePath)
 	if err != nil {
@@ -337,7 +375,7 @@ func detectAlgorithmFromHeader(filePath string) string {
 	return "AES256"
 }
 
-// handleBatch 批量加密/解密 CLI 入口
+// handleBatch batch encrypt/decrypt CLI entry
 func handleBatch(args []string) {
 	if len(args) < 3 {
 		fmt.Fprintln(os.Stderr, "用法: minicipher batch <encrypt|decrypt> <input_dir> <output_dir> [选项]")
@@ -371,7 +409,7 @@ func handleBatch(args []string) {
 		kt = crypto.KeyTypeRandom
 	}
 
-	// 密码处理
+	// Password handling
 	var password []byte
 	if kt == crypto.KeyTypePassword {
 		passwordStdin := false
@@ -393,7 +431,7 @@ func handleBatch(args []string) {
 		password = []byte(pwd)
 	}
 
-	// 处理模式
+	// Processing mode
 	modeStr := parsed["--mode"]
 	if modeStr == "" {
 		modeStr = "recursive"
@@ -468,7 +506,7 @@ func runTests() {
 	testData := []byte("Hello, MiniCipher! 你好，加密世界！")
 	aes := crypto.NewAES256Algorithm()
 
-	// AES256 随机密钥
+	// AES256 random key
 	encResult, err := aes.EncryptWithRandomKey(testData)
 	if err != nil {
 		fmt.Printf("❌ AES256 加密失败: %v\n", err)
@@ -485,7 +523,7 @@ func runTests() {
 		fmt.Println("❌ AES256 随机密钥: 数据不匹配")
 	}
 
-	// AES256 密码模式
+	// AES256 password mode
 	password := []byte("MySecurePassword123!")
 	encResult2, err := aes.EncryptWithPassword(testData, password, nil)
 	if err != nil {
@@ -521,7 +559,7 @@ func runTests() {
 		fmt.Println("❌ OTP: 数据不匹配")
 	}
 
-	// 文件加密/解密
+	// File encrypt/decrypt
 	tmpDir, _ := os.MkdirTemp("", "minicipher_test")
 	defer os.RemoveAll(tmpDir)
 
@@ -551,7 +589,7 @@ func runTests() {
 		fmt.Println("❌ 文件加解密: 数据不匹配")
 	}
 
-	// 密钥文件保存/加载（完整格式 key+iv+tag）
+	// Key file save/load (full format key+iv+tag)
 	keyFilePath := filepath.Join(tmpDir, "test.key")
 	if err := crypto.SaveKeyFileWithIVTag(keyFilePath, fileResult.Key, fileResult.IV, fileResult.Tag); err != nil {
 		fmt.Printf("❌ 保存密钥文件失败: %v\n", err)
@@ -569,7 +607,7 @@ func runTests() {
 		fmt.Printf("❌ 密钥文件保存/加载: 格式错误 (key=%d iv=%d)\n", len(k2), len(iv2))
 	}
 
-	// 测试智能加载密钥 (LoadKey)
+	// Test smart key loading (LoadKey)
 	keyOnlyPath := filepath.Join(tmpDir, "test_key_only.key")
 	if err := crypto.SaveKeyFile(keyOnlyPath, fileResult.Key); err != nil {
 		fmt.Printf("❌ 保存纯key文件失败: %v\n", err)
