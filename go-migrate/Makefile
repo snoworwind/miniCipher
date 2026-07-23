@@ -9,7 +9,6 @@ all: build
 # 构建统一入口（根据当前 OS 自动选择）
 build:
 	cd cmd/minicipher && go build -trimpath -ldflags="$(GO_LDFLAGS)" -o ../../bin/minicipher .
-	@which upx >/dev/null 2>&1 && upx --best --lzma bin/minicipher 2>/dev/null || true
 
 # 构建 CLI（仅命令行，保留控制台）
 build-cli:
@@ -22,7 +21,6 @@ build-gui:
 		windows) cd cmd/minicipher && go build -trimpath -ldflags="$(GO_LDFLAGS) -H windowsgui" -o ../../bin/minicipher.exe . ;; \
 		*)       cd cmd/minicipher && go build -trimpath -ldflags="$(GO_LDFLAGS)" -o ../../bin/minicipher . ;; \
 	esac
-	@which upx >/dev/null 2>&1 && upx --best --lzma bin/minicipher bin/minicipher.exe 2>/dev/null || true
 
 # 构建 macOS .app 捆绑包（Finder 双击无终端）
 build-macos-app: build
@@ -93,4 +91,3 @@ build-all:
 	GOOS=darwin GOARCH=arm64 go build -trimpath -ldflags="$(GO_LDFLAGS)" -o bin/minicipher-darwin-arm64 ./cmd/minicipher/
 	GOOS=linux GOARCH=amd64 go build -trimpath -ldflags="$(GO_LDFLAGS)" -o bin/minicipher-linux-amd64 ./cmd/minicipher/
 	GOOS=windows GOARCH=amd64 go build -trimpath -ldflags="$(GO_LDFLAGS) -H windowsgui" -o bin/minicipher-windows-amd64.exe ./cmd/minicipher/
-	@which upx >/dev/null 2>&1 && for f in bin/minicipher-*; do upx --best --lzma "$$f" 2>/dev/null; done || true

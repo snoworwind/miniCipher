@@ -133,7 +133,7 @@ miniCipher/
 | `build-go.yml` | push / PR 到 main 分支 |
 | `release-go.yml` | 推送 `v*` tag（如 `v2.1.0`） |
 
-CI 交叉编译 Windows/macOS/Linux，UPX 压缩后上传为 Release 资产。
+CI 交叉编译 Windows/macOS/Linux，上传为 Release 资产。
 
 ## 常见问题
 
