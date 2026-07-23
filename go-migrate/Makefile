@@ -1,23 +1,28 @@
 .PHONY: build build-cli build-gui test clean run-cli run-test lint deps install build-all build-macos-app
 
+# 共享 ldflags
+GO_LDFLAGS := -s -w
+
 # 默认目标
 all: build
 
 # 构建统一入口（根据当前 OS 自动选择）
 build:
-	cd cmd/minicipher && go build -o ../../bin/minicipher .
+	cd cmd/minicipher && go build -trimpath -ldflags="$(GO_LDFLAGS)" -o ../../bin/minicipher .
+	@which upx >/dev/null 2>&1 && upx --best --lzma bin/minicipher 2>/dev/null || true
 
 # 构建 CLI（仅命令行，保留控制台）
 build-cli:
-	cd cmd/minicipher && go build -o ../../bin/minicipher .
+	cd cmd/minicipher && go build -trimpath -ldflags="$(GO_LDFLAGS)" -o ../../bin/minicipher .
 
 # 构建 GUI 模式（Windows: 隐藏控制台；其他平台: 正常构建）
 # Windows 使用 -H windowsgui 编译为 GUI 子系统，双击启动时不弹控制台
 build-gui:
 	@case "$$(go env GOOS)" in \
-		windows) cd cmd/minicipher && go build -ldflags="-H windowsgui" -o ../../bin/minicipher.exe . ;; \
-		*)       cd cmd/minicipher && go build -o ../../bin/minicipher . ;; \
+		windows) cd cmd/minicipher && go build -trimpath -ldflags="$(GO_LDFLAGS) -H windowsgui" -o ../../bin/minicipher.exe . ;; \
+		*)       cd cmd/minicipher && go build -trimpath -ldflags="$(GO_LDFLAGS)" -o ../../bin/minicipher . ;; \
 	esac
+	@which upx >/dev/null 2>&1 && upx --best --lzma bin/minicipher bin/minicipher.exe 2>/dev/null || true
 
 # 构建 macOS .app 捆绑包（Finder 双击无终端）
 build-macos-app: build
@@ -84,7 +89,8 @@ install: build-cli
 
 # 交叉编译
 build-all:
-	GOOS=darwin GOARCH=amd64 go build -o bin/minicipher-darwin-amd64 ./cmd/minicipher/
-	GOOS=darwin GOARCH=arm64 go build -o bin/minicipher-darwin-arm64 ./cmd/minicipher/
-	GOOS=linux GOARCH=amd64 go build -o bin/minicipher-linux-amd64 ./cmd/minicipher/
-	GOOS=windows GOARCH=amd64 go build -ldflags="-H windowsgui" -o bin/minicipher-windows-amd64.exe ./cmd/minicipher/
+	GOOS=darwin GOARCH=amd64 go build -trimpath -ldflags="$(GO_LDFLAGS)" -o bin/minicipher-darwin-amd64 ./cmd/minicipher/
+	GOOS=darwin GOARCH=arm64 go build -trimpath -ldflags="$(GO_LDFLAGS)" -o bin/minicipher-darwin-arm64 ./cmd/minicipher/
+	GOOS=linux GOARCH=amd64 go build -trimpath -ldflags="$(GO_LDFLAGS)" -o bin/minicipher-linux-amd64 ./cmd/minicipher/
+	GOOS=windows GOARCH=amd64 go build -trimpath -ldflags="$(GO_LDFLAGS) -H windowsgui" -o bin/minicipher-windows-amd64.exe ./cmd/minicipher/
+	@which upx >/dev/null 2>&1 && for f in bin/minicipher-*; do upx --best --lzma "$$f" 2>/dev/null; done || true

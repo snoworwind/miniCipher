@@ -30,6 +30,10 @@ if "%MINGW_BIN%"=="" (
     echo [INFO] Using MinGW at: %MINGW_BIN%
 )
 
+:: Shared ldflags: strip symbols (-s), strip debug info (-w), remove build paths (-trimpath)
+set "GO_LDFLAGS=-s -w"
+set "GO_TRIM=-trimpath"
+
 :: Build targets for miniCipher (Windows)
 
 if "%~1"==""      goto :build
@@ -44,25 +48,46 @@ goto :help
 
 :build
 echo [BUILD] Building minicipher (console subsystem^)...
+if not exist bin mkdir bin
 cd cmd\minicipher
-go build -o ..\..\bin\minicipher.exe .
+go build %GO_TRIM% -ldflags="%GO_LDFLAGS%" -o ..\..\bin\minicipher.exe .
 if %ERRORLEVEL% neq 0 (
     echo [FAIL] Build failed.
     exit /b 1
 )
-echo [OK] bin\minicipher.exe built successfully.
+echo [OK] bin\minicipher.exe built.
+call :compress "..\..\bin\minicipher.exe"
+exit /b 0
+
+:: ========== Helper: compress binary with UPX if available ==========
+:compress
+if "%~1"=="" exit /b 0
+set "BINFILE=%~f1"
+if not exist "%BINFILE%" exit /b 0
+
+where upx >nul 2>&1
+if %ERRORLEVEL% equ 0 (
+    echo [COMPRESS] Shrinking %BINFILE% with UPX...
+    upx --best --lzma "%BINFILE%" 2>&1 | findstr /v "Copyright" | findstr /v "^\s*$"
+    if %ERRORLEVEL% neq 0 echo [COMPRESS] Failed, keeping original binary.
+) else (
+    echo [INFO] UPX not found. Install from https://upx.github.io/ to reduce binary size.
+    echo          e.g. winget install upx
+)
 exit /b 0
 
 :build-gui
 echo [BUILD] Building minicipher (GUI subsystem, no console on double-click^)...
+if not exist bin mkdir bin
 cd cmd\minicipher
-go build -ldflags="-H windowsgui" -o ..\..\bin\minicipher.exe .
+go build %GO_TRIM% -ldflags="%GO_LDFLAGS% -H windowsgui" -o ..\..\bin\minicipher.exe .
 if %ERRORLEVEL% neq 0 (
     echo [FAIL] GUI build failed.
     exit /b 1
 )
 echo [OK] bin\minicipher.exe built with -H windowsgui.
 echo       Double-click to launch GUI without console. Drag onto cmd to use CLI.
+call :compress "..\..\bin\minicipher.exe"
 exit /b 0
 
 :build-all
@@ -71,23 +96,27 @@ if not exist bin mkdir bin
 
 echo   Windows amd64...
 go env -w GOOS=windows GOARCH=amd64
-go build -ldflags="-H windowsgui" -o bin\minicipher-windows-amd64.exe .\cmd\minicipher\
+go build %GO_TRIM% -ldflags="%GO_LDFLAGS% -H windowsgui" -o bin\minicipher-windows-amd64.exe .\cmd\minicipher\
 if %ERRORLEVEL% neq 0 (
     echo [FAIL] Windows amd64 build failed.
     exit /b 1
 )
+call :compress "bin\minicipher-windows-amd64.exe"
 
 echo   Darwin amd64...
 go env -w GOOS=darwin GOARCH=amd64
-go build -o bin\minicipher-darwin-amd64 .\cmd\minicipher\
+go build %GO_TRIM% -ldflags="%GO_LDFLAGS%" -o bin\minicipher-darwin-amd64 .\cmd\minicipher\
+call :compress "bin\minicipher-darwin-amd64" 2>nul
 
 echo   Darwin arm64...
 go env -w GOOS=darwin GOARCH=arm64
-go build -o bin\minicipher-darwin-arm64 .\cmd\minicipher\
+go build %GO_TRIM% -ldflags="%GO_LDFLAGS%" -o bin\minicipher-darwin-arm64 .\cmd\minicipher\
+call :compress "bin\minicipher-darwin-arm64" 2>nul
 
 echo   Linux amd64...
 go env -w GOOS=linux GOARCH=amd64
-go build -o bin\minicipher-linux-amd64 .\cmd\minicipher\
+go build %GO_TRIM% -ldflags="%GO_LDFLAGS%" -o bin\minicipher-linux-amd64 .\cmd\minicipher\
+call :compress "bin\minicipher-linux-amd64" 2>nul
 
 go env -u GOOS GOARCH
 echo [OK] Cross-compilation complete. Binaries in bin\

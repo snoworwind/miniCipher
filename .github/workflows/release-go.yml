@@ -66,7 +66,18 @@ jobs:
           if [ "$GOOS" = "windows" ]; then
             WFLAGS="$WFLAGS -H windowsgui"
           fi
-          go build -o dist/${{ matrix.output }} -ldflags "$WFLAGS" ./cmd/minicipher/
+          go build -trimpath -o dist/${{ matrix.output }} -ldflags "$WFLAGS" ./cmd/minicipher/
+
+      - name: Compress with UPX
+        if: ${{ matrix.os == 'windows-latest' || matrix.os == 'ubuntu-latest' }}
+        shell: bash
+        run: |
+          if [ "$RUNNER_OS" = "Windows" ]; then
+            choco install upx -y --no-progress
+          else
+            sudo apt-get update -qq && sudo apt-get install -y -qq upx-ucl
+          fi
+          upx --best --lzma dist/${{ matrix.output }}
 
       - name: Verify build
         run: ls -lh dist/
