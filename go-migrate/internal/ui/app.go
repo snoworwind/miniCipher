@@ -154,13 +154,13 @@ func (a *App) setupMenu() {
 				langDisplay = "English"
 			}
 			aboutText := fmt.Sprintf(
-				"MiniCipher v%s\n\n"+
+				"miniCipher v2.1.0\n\n"+
 					"支持算法: OTP, AES256-GCM\n"+
 					"语言: %s\n"+
 					"主题: %s\n\n"+
 					"© 2026 miniCipher Project\n"+
 					"MIT License",
-				a.cfg.Version, langDisplay, a.cfg.UI.Theme,
+				langDisplay, a.cfg.UI.Theme,
 			)
 			dialog.ShowInformation(a.tr.T("about"), aboutText, a.win)
 		}),
