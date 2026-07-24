@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 	"unicode"
+	"unicode/utf8"
 )
 
 // FileCipher 高级文件加密/解密API
@@ -101,16 +102,23 @@ func (fc *FileCipher) ValidatePassword(password []byte) (bool, string) {
 		hasLower := false
 		hasDigit := false
 
-		for _, b := range password {
-			ch := rune(b)
+		// 直接在 []byte 上解码 UTF-8 rune，避免 string(password) 产生不可清零的副本
+		for len(password) > 0 {
+			r, size := utf8.DecodeRune(password)
+			if r == utf8.RuneError && size <= 1 {
+				// 无效 UTF-8 字节，跳过
+				password = password[1:]
+				continue
+			}
 			switch {
-			case unicode.IsUpper(ch):
+			case unicode.IsUpper(r):
 				hasUpper = true
-			case unicode.IsLower(ch):
+			case unicode.IsLower(r):
 				hasLower = true
-			case unicode.IsDigit(ch):
+			case unicode.IsDigit(r):
 				hasDigit = true
 			}
+			password = password[size:]
 		}
 
 		if !hasUpper || !hasLower || !hasDigit {
