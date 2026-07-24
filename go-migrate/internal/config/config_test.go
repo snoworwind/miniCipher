@@ -12,7 +12,7 @@ func TestDefaultConfig(t *testing.T) {
 	if cfg == nil {
 		t.Fatal("DefaultConfig returned nil")
 	}
-	if cfg.Version != "2.1.0" {
+	if cfg.Version != "2.1.1" {
 		t.Errorf("unexpected version: %s", cfg.Version)
 	}
 	if cfg.Crypto.DefaultAlgorithm != "AES256" {
@@ -270,7 +270,7 @@ func TestManagerLoadCreatesDefault(t *testing.T) {
 	if err := json.Unmarshal(readData, &parsed); err != nil {
 		t.Fatalf("failed to parse config: %v", err)
 	}
-	if parsed.Version != "2.1.0" {
+	if parsed.Version != "2.1.1" {
 		t.Errorf("unexpected version in saved config: %s", parsed.Version)
 	}
 }

@@ -5,7 +5,7 @@
   <img src="https://img.shields.io/badge/Fyne-v2.8-blue" alt="Fyne v2.8">
   <img src="https://img.shields.io/badge/Platform-Windows%20%7C%20macOS%20%7C%20Linux-green" alt="Cross-Platform">
   <img src="https://img.shields.io/badge/License-MIT-yellow" alt="MIT License">
-  <img src="https://img.shields.io/badge/Version-2.1.0-orange" alt="Version 2.1.0">
+  <img src="https://img.shields.io/badge/Version-2.1.1-orange" alt="Version 2.1.1">
 </div>
 
 ## 概述
@@ -131,7 +131,7 @@ miniCipher/
 | Workflow | 触发条件 |
 |---|---|
 | `build-go.yml` | push / PR 到 main 分支 |
-| `release-go.yml` | 推送 `v*` tag（如 `v2.1.0`） |
+| `release-go.yml` | 推送 `v*` tag（如 `v2.1.1`） |
 
 CI 交叉编译 Windows/macOS/Linux，上传为 Release 资产。
 
@@ -159,7 +159,7 @@ macOS Gatekeeper 可能阻止未签名应用。右键点击 → "打开" 即可�
 
 ## 版本历史
 
-- **v2.1.0** — 统一 CLI/GUI 入口、Windows `-H windowsgui`、调试模式控制台、CI 完善
+- **v2.1.1** — 统一 CLI/GUI 入口、Windows `-H windowsgui`、调试模式控制台、CI 完善
 - **v2.0.0** — Go/Fyne 重写，现代化 UI，原生静态编译
 - **v1.0** — Python/tkinter 初始版本
 

@@ -60,7 +60,7 @@ type BatchConfig struct {
 // DefaultConfig 返回默认配置
 func DefaultConfig() *Config {
 	return &Config{
-		Version: "2.1.0",
+		Version: "2.1.1",
 		UI: UIConfig{
 			Language: "zh_CN",
 			Theme:    "light",

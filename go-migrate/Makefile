@@ -38,9 +38,9 @@ build-macos-app: build
 	@echo '    <key>CFBundleName</key>' >> bin/MiniCipher.app/Contents/Info.plist
 	@echo '    <string>miniCipher</string>' >> bin/MiniCipher.app/Contents/Info.plist
 	@echo '    <key>CFBundleVersion</key>' >> bin/MiniCipher.app/Contents/Info.plist
-	@echo '    <string>2.1.0</string>' >> bin/MiniCipher.app/Contents/Info.plist
+	@echo '    <string>2.1.1</string>' >> bin/MiniCipher.app/Contents/Info.plist
 	@echo '    <key>CFBundleShortVersionString</key>' >> bin/MiniCipher.app/Contents/Info.plist
-	@echo '    <string>2.1.0</string>' >> bin/MiniCipher.app/Contents/Info.plist
+	@echo '    <string>2.1.1</string>' >> bin/MiniCipher.app/Contents/Info.plist
 	@echo '    <key>LSMinimumSystemVersion</key>' >> bin/MiniCipher.app/Contents/Info.plist
 	@echo '    <string>10.14</string>' >> bin/MiniCipher.app/Contents/Info.plist
 	@echo '    <key>NSHighResolutionCapable</key>' >> bin/MiniCipher.app/Contents/Info.plist

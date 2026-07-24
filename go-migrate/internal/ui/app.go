@@ -169,7 +169,7 @@ func (a *App) setupMenu() {
 				langDisplay = "English"
 			}
 			aboutText := fmt.Sprintf(
-				"miniCipher v2.1.0\n\n"+
+				"miniCipher v2.1.1\n\n"+
 					"支持算法: OTP, AES256-GCM\n"+
 					"语言: %s\n"+
 					"主题: %s\n\n"+
