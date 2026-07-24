@@ -34,11 +34,11 @@ type AdvancedConfig struct {
 
 // CryptoConfig 加密配置
 type CryptoConfig struct {
-	DefaultAlgorithm    string `json:"default_algorithm"`    // "OTP" or "AES256"
-	DefaultKeyType      string `json:"default_key_type"`     // "random" or "password"
-	PasswordMinLength   int    `json:"password_min_length"`
-	RequireStrongPass   bool   `json:"require_strong_password"`
-	OTPKeyFormat        string `json:"otp_key_format"`       // "hex" or "binary"
+	DefaultAlgorithm  string `json:"default_algorithm"` // "OTP" or "AES256"
+	DefaultKeyType    string `json:"default_key_type"`  // "random" or "password"
+	PasswordMinLength int    `json:"password_min_length"`
+	RequireStrongPass bool   `json:"require_strong_password"`
+	OTPKeyFormat      string `json:"otp_key_format"` // "hex" or "binary"
 }
 
 // PathsConfig 路径配置
@@ -182,10 +182,14 @@ func deepMergeJSON(config *Config, data []byte) error {
 
 	// Top-level fields
 	if v, ok := raw["version"]; ok {
-		json.Unmarshal(v, &config.Version)
+		if err := json.Unmarshal(v, &config.Version); err != nil {
+			return err
+		}
 	}
 	if v, ok := raw["debug"]; ok {
-		json.Unmarshal(v, &config.Debug)
+		if err := json.Unmarshal(v, &config.Debug); err != nil {
+			return err
+		}
 	}
 
 	// UI section

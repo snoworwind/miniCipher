@@ -25,7 +25,7 @@ const (
 type Mode int
 
 const (
-	ModeFiles          Mode = iota
+	ModeFiles Mode = iota
 	ModeFolder
 	ModeFolderRecursive
 )
@@ -296,7 +296,7 @@ func (bp *BatchProcessor) collectFiles(paths []string, op OperationType, mode Mo
 		}
 		if info.IsDir() {
 			if mode == ModeFolderRecursive || mode == ModeFolder {
-				filepath.Walk(path, func(p string, fi os.FileInfo, err error) error {
+				if walkErr := filepath.Walk(path, func(p string, fi os.FileInfo, err error) error {
 					if err != nil || fi.IsDir() {
 						return nil
 					}
@@ -317,7 +317,9 @@ func (bp *BatchProcessor) collectFiles(paths []string, op OperationType, mode Mo
 					files = append(files, p)
 					totalSize += fi.Size()
 					return nil
-				})
+				}); walkErr != nil {
+					pathErrors = append(pathErrors, fmt.Sprintf("%s: %v", path, walkErr))
+				}
 			}
 		} else {
 			if bp.shouldIncludeFile(path, info, op, excludeExtensions, excludeNames) {
@@ -347,6 +349,9 @@ func (bp *BatchProcessor) collectFiles(paths []string, op OperationType, mode Mo
 		files[i] = fws[i].path
 	}
 
+	if len(pathErrors) > 0 {
+		return files, totalSize, fmt.Errorf("路径收集错误: %s", strings.Join(pathErrors, "; "))
+	}
 	return files, totalSize, nil
 }
 
@@ -465,10 +470,7 @@ func findMatchingKeyFile(inputPath, outputDir string, algorithm crypto.Algorithm
 	baseName := filepath.Base(inputPath)
 
 	// 处理文件名，去除.enc扩展名获取原始文件名
-	originalName := baseName
-	if strings.HasSuffix(originalName, ".enc") {
-		originalName = originalName[:len(originalName)-4]
-	}
+	originalName := strings.TrimSuffix(baseName, ".enc")
 
 	// 获取不包含扩展名的基本名称
 	baseNameNoExt := originalName

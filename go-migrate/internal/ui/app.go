@@ -3,6 +3,7 @@ package ui
 import (
 	"fmt"
 	"image/color"
+	"log"
 	"path/filepath"
 	"strconv"
 	"sync"
@@ -29,9 +30,9 @@ type App struct {
 	tr     *lang.Translator
 
 	// 算法选择
-	algoSelect     *widget.Select
-	keyTypeSelect  *widget.Select
-	passwordEntry  *widget.Entry
+	algoSelect    *widget.Select
+	keyTypeSelect *widget.Select
+	passwordEntry *widget.Entry
 
 	// 加密面板
 	encInputEntry  *widget.Entry
@@ -127,13 +128,17 @@ func (a *App) setupMenu() {
 		fyne.NewMenuItem("简体中文", func() {
 			a.tr.SetLanguage("zh_CN")
 			a.cfg.UI.Language = "zh_CN"
-			a.cfgMgr.Save()
+			if err := a.cfgMgr.Save(); err != nil {
+				log.Println("保存配置失败:", err)
+			}
 			a.safeRebuildUI()
 		}),
 		fyne.NewMenuItem("English", func() {
 			a.tr.SetLanguage("en_US")
 			a.cfg.UI.Language = "en_US"
-			a.cfgMgr.Save()
+			if err := a.cfgMgr.Save(); err != nil {
+				log.Println("保存配置失败:", err)
+			}
 			a.safeRebuildUI()
 		}),
 	)
@@ -141,12 +146,16 @@ func (a *App) setupMenu() {
 	themeMenu := fyne.NewMenu(a.tr.T("theme_menu"),
 		fyne.NewMenuItem(a.tr.T("theme.light"), func() {
 			a.cfg.UI.Theme = "light"
-			a.cfgMgr.Save()
+			if err := a.cfgMgr.Save(); err != nil {
+				log.Println("保存配置失败:", err)
+			}
 			a.safeRebuildUI()
 		}),
 		fyne.NewMenuItem(a.tr.T("theme.dark"), func() {
 			a.cfg.UI.Theme = "dark"
-			a.cfgMgr.Save()
+			if err := a.cfgMgr.Save(); err != nil {
+				log.Println("保存配置失败:", err)
+			}
 			a.safeRebuildUI()
 		}),
 	)
@@ -262,7 +271,9 @@ func (a *App) browseFile(entry *widget.Entry) {
 			entry.SetText(path)
 			if a.cfg.Paths.RememberLastFolder {
 				a.cfg.Paths.LastInputFolder = filepath.Dir(path)
-				a.cfgMgr.Save()
+				if err := a.cfgMgr.Save(); err != nil {
+					log.Println("保存配置失败:", err)
+				}
 			}
 		}
 	}, a.win)
@@ -275,7 +286,9 @@ func (a *App) browseDir(entry *widget.Entry) {
 			entry.SetText(path)
 			if a.cfg.Paths.RememberLastFolder {
 				a.cfg.Paths.LastOutputFolder = path
-				a.cfgMgr.Save()
+				if err := a.cfgMgr.Save(); err != nil {
+					log.Println("保存配置失败:", err)
+				}
 			}
 		}
 	}, a.win)
@@ -811,9 +824,13 @@ func parseHexColor(hex string) color.Color {
 	var r, g, b uint8
 	switch len(hex) {
 	case 7: // #RRGGBB
-		fmt.Sscanf(hex, "#%02x%02x%02x", &r, &g, &b)
+		if _, err := fmt.Sscanf(hex, "#%02x%02x%02x", &r, &g, &b); err != nil {
+			return color.Black
+		}
 	case 4: // #RGB shorthand
-		fmt.Sscanf(hex, "#%01x%01x%01x", &r, &g, &b)
+		if _, err := fmt.Sscanf(hex, "#%01x%01x%01x", &r, &g, &b); err != nil {
+			return color.Black
+		}
 		r *= 17
 		g *= 17
 		b *= 17

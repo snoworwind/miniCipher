@@ -241,7 +241,9 @@ func TestOTPKeyFormatDetection(t *testing.T) {
 	// Create a hex key file (.txt)
 	hexPath := filepath.Join(tmpDir, "key.txt")
 	hexData := []byte("aabbccdd")
-	os.WriteFile(hexPath, hexData, 0644)
+	if err := os.WriteFile(hexPath, hexData, 0644); err != nil {
+		t.Fatal(err)
+	}
 
 	format, byteSize, err := detectOTPKeyFormat(hexPath)
 	if err != nil {
@@ -257,7 +259,9 @@ func TestOTPKeyFormatDetection(t *testing.T) {
 	// Create a binary key file (.bin)
 	binPath := filepath.Join(tmpDir, "key.bin")
 	binData := []byte{0xAA, 0xBB, 0xCC, 0xDD}
-	os.WriteFile(binPath, binData, 0644)
+	if err := os.WriteFile(binPath, binData, 0644); err != nil {
+		t.Fatal(err)
+	}
 
 	format, byteSize, err = detectOTPKeyFormat(binPath)
 	if err != nil {
@@ -272,7 +276,9 @@ func TestOTPKeyFormatDetection(t *testing.T) {
 
 	// Create a file with no extension that has hex-only content
 	noExtPath := filepath.Join(tmpDir, "keyfile")
-	os.WriteFile(noExtPath, hexData, 0644)
+	if err := os.WriteFile(noExtPath, hexData, 0644); err != nil {
+		t.Fatal(err)
+	}
 
 	format, byteSize, err = detectOTPKeyFormat(noExtPath)
 	if err != nil {

@@ -367,9 +367,6 @@ func (a *AES256Algorithm) decryptLegacy(inputFile, outputFile string,
 			return nil, decryptErr
 		}
 	}
-	// 立即释放密文内存
-	ciphertext = nil
-
 	// 分块写入输出文件
 	outFile, err := os.Create(outputFile)
 	if err != nil {
@@ -417,9 +414,9 @@ func (a *AES256Algorithm) decryptChunked(f *os.File, outputFile string,
 
 	// Read header fields that are common to both attempts
 	type headerData struct {
-		salt           []byte
-		baseIV         []byte
-		fileChunkSize  uint32
+		salt          []byte
+		baseIV        []byte
+		fileChunkSize uint32
 	}
 	var hdr headerData
 
