@@ -52,13 +52,23 @@ func TestBuildOutputPathDecrypt(t *testing.T) {
 }
 
 func TestBuildOutputPathPreserveStructure(t *testing.T) {
+	tmpDir := t.TempDir()
 	bp := New(4, 10)
 	bp.preserveStruct = true
-	bp.baseInputPath = "/data/docs"
+	bp.baseInputPath = tmpDir
 
-	result := bp.buildOutputPath("/data/docs/sub/report.pdf", "/out", OpEncrypt)
-	if !strings.HasPrefix(result, filepath.Join("/out", "sub")) {
-		t.Errorf("preserve structure: got %s, expected subdirectory preserved", result)
+	// Create input subdirectory structure so the relative path is valid.
+	// buildOutputPath internally calls os.MkdirAll on the output subdirectory,
+	// which requires the parent to be writable (t.TempDir() satisfies this).
+	inputSubDir := filepath.Join(tmpDir, "sub")
+	inputPath := filepath.Join(inputSubDir, "report.pdf")
+	outputDir := filepath.Join(tmpDir, "out")
+
+	result := bp.buildOutputPath(inputPath, outputDir, OpEncrypt)
+
+	expectedPrefix := filepath.Join(outputDir, "sub")
+	if !strings.HasPrefix(result, expectedPrefix) {
+		t.Errorf("preserve structure: got %s, expected prefix %s", result, expectedPrefix)
 	}
 	if !strings.HasSuffix(result, ".pdf.enc") {
 		t.Errorf("preserve structure: output should end with .pdf.enc, got %s", result)
