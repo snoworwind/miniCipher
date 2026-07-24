@@ -90,7 +90,9 @@ func TestShouldIncludeFile(t *testing.T) {
 
 	t.Run("exclude tmp files", func(t *testing.T) {
 		path := filepath.Join(tmpDir, "test.tmp")
-		os.WriteFile(path, []byte("data"), 0644)
+		if err := os.WriteFile(path, []byte("data"), 0644); err != nil {
+			t.Fatal(err)
+		}
 		info, _ := os.Stat(path)
 		if bp.shouldIncludeFile(path, info, OpEncrypt, excludeExts, excludeNames) {
 			t.Error(".tmp files should be excluded")
@@ -99,7 +101,9 @@ func TestShouldIncludeFile(t *testing.T) {
 
 	t.Run("exclude .enc when encrypting", func(t *testing.T) {
 		path := filepath.Join(tmpDir, "already.enc")
-		os.WriteFile(path, []byte("encrypted data here"), 0644)
+		if err := os.WriteFile(path, []byte("encrypted data here"), 0644); err != nil {
+			t.Fatal(err)
+		}
 		info, _ := os.Stat(path)
 		if bp.shouldIncludeFile(path, info, OpEncrypt, excludeExts, excludeNames) {
 			t.Error(".enc files should be excluded when encrypting")
@@ -108,7 +112,9 @@ func TestShouldIncludeFile(t *testing.T) {
 
 	t.Run("include .enc when decrypting", func(t *testing.T) {
 		path := filepath.Join(tmpDir, "file.enc")
-		os.WriteFile(path, []byte("encrypted data here"), 0644)
+		if err := os.WriteFile(path, []byte("encrypted data here"), 0644); err != nil {
+			t.Fatal(err)
+		}
 		info, _ := os.Stat(path)
 		if !bp.shouldIncludeFile(path, info, OpDecrypt, excludeExts, excludeNames) {
 			t.Error(".enc files should be included when decrypting")
