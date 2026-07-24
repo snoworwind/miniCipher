@@ -223,8 +223,8 @@ func handleEncrypt(args []string) {
 	var err error
 	var otpKeyPath string // OTP key path, reused for notification
 
-	switch algo {
-	case "OTP":
+	switch crypto.AlgorithmType(algo) {
+	case crypto.AlgorithmOTP:
 		otpFormat := cfg.Crypto.OTPKeyFormat
 		if otpFormat == "" {
 			otpFormat = "hex"
@@ -232,7 +232,7 @@ func handleEncrypt(args []string) {
 		otpKeyPath = crypto.BuildKeyFilePath(outputDir, inputBase, crypto.AlgorithmOTP, crypto.KeyTypeRandom, otpFormat)
 		otp := crypto.NewOTPAlgorithm()
 		result, err = otp.EncryptToFile(inputFile, outputFile, otpKeyPath, chunkSize)
-	case "AES256":
+	case crypto.AlgorithmAES256:
 		aes := crypto.NewAES256Algorithm()
 		result, err = aes.EncryptToFile(inputFile, outputFile, kt, []byte(password), nil, chunkSize)
 	default:
@@ -248,14 +248,14 @@ func handleEncrypt(args []string) {
 	fmt.Println(translator.Tf("success.encryption_stat", outputFile))
 
 	// Save key (random key mode)
-	if algo == "AES256" && kt == crypto.KeyTypeRandom {
+	if crypto.AlgorithmType(algo) == crypto.AlgorithmAES256 && kt == crypto.KeyTypeRandom {
 		keyFile := crypto.BuildKeyFilePath(outputDir, inputBase, crypto.AlgorithmAES256, crypto.KeyTypeRandom, "")
 		if err := crypto.SaveKeyFileWithIVTag(keyFile, result.Key, result.IV, result.Tag); err != nil {
 			fmt.Fprintf(os.Stderr, "%s\n", translator.Tf("warn.key_save", err))
 		} else {
 			fmt.Printf("密钥文件: %s (请妥善保管！)\n", keyFile)
 		}
-	} else if algo == "OTP" {
+	} else if crypto.AlgorithmType(algo) == crypto.AlgorithmOTP {
 		fmt.Printf("密钥文件: %s (请妥善保管！)\n", otpKeyPath)
 	}
 }
@@ -308,7 +308,7 @@ func handleDecrypt(args []string) {
 	var decryptErr error
 
 	switch algo {
-	case "OTP":
+	case crypto.AlgorithmOTP:
 		if keyFile == "" {
 			fmt.Fprintln(os.Stderr, translator.T("error.no_key"))
 			os.Exit(1)
@@ -317,7 +317,7 @@ func handleDecrypt(args []string) {
 		otp := crypto.NewOTPAlgorithm()
 		_, decryptErr = otp.DecryptFromFile(inputFile, outputFile, keyFile, chunkSize)
 
-	case "AES256":
+	case crypto.AlgorithmAES256:
 		aes := crypto.NewAES256Algorithm()
 		if password != "" {
 			_, decryptErr = aes.DecryptFromFile(inputFile, outputFile,
@@ -355,25 +355,36 @@ func handleDecrypt(args []string) {
 }
 
 // detectAlgorithmFromHeader detects algorithm type from file header (only reads 4 bytes)
-func detectAlgorithmFromHeader(filePath string) string {
+func detectAlgorithmFromHeader(filePath string) crypto.AlgorithmType {
 	f, err := os.Open(filePath)
 	if err != nil {
-		return "AES256"
+		return crypto.AlgorithmAES256
 	}
 	defer f.Close()
 
 	header := make([]byte, 4)
 	if _, err := io.ReadFull(f, header); err != nil {
-		return "AES256"
+		// Can't read header — fall back to extension-based detection
+		if strings.HasSuffix(strings.ToLower(filePath), ".enc") {
+			return crypto.AlgorithmOTP
+		}
+		return crypto.AlgorithmAES256
 	}
 
-	if header[0] == 'O' && header[1] == 'T' && header[2] == 'P' {
-		return "OTP"
+	// New format: OTP\x00 header
+	if header[0] == 'O' && header[1] == 'T' && header[2] == 'P' && header[3] == 0x00 {
+		return crypto.AlgorithmOTP
 	}
-	if header[0] == 'A' && header[1] == 'E' && header[2] == 'S' {
-		return "AES256"
+	// AES format: AES\x00 / AES\x01 / AES\x02
+	if header[0] == 'A' && header[1] == 'E' && header[2] == 'S' &&
+		(header[3] == 0x00 || header[3] == 0x01 || header[3] == 0x02) {
+		return crypto.AlgorithmAES256
 	}
-	return "AES256"
+	// Fall back to extension for old OTP files without header
+	if strings.HasSuffix(strings.ToLower(filePath), ".enc") {
+		return crypto.AlgorithmOTP
+	}
+	return crypto.AlgorithmAES256
 }
 
 // handleBatch batch encrypt/decrypt CLI entry

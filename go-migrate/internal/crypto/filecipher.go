@@ -365,6 +365,10 @@ func detectAlgorithmByFileHeader(filePath string) AlgorithmType {
 
 	header := make([]byte, 4)
 	if _, err := io.ReadFull(f, header); err != nil {
+		// Can't read header — fall back to extension-based detection
+		if strings.HasSuffix(filePath, ".enc") {
+			return AlgorithmOTP
+		}
 		return AlgorithmAES256
 	}
 

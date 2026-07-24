@@ -90,7 +90,12 @@ func (o *OTPAlgorithm) EncryptToFileWithProgress(inputFile, outputFile, keyFileP
 	}
 	defer outFile.Close()
 
-	keyFile, err := os.Create(keyFilePath)
+	// 写入 OTP 文件头，用于算法自动检测
+	if _, err := outFile.Write([]byte{'O', 'T', 'P', 0x00}); err != nil {
+		return nil, fmt.Errorf("写入OTP文件头失败: %w", err)
+	}
+
+	keyFile, err := os.OpenFile(keyFilePath, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0600)
 	if err != nil {
 		return nil, fmt.Errorf("创建密钥文件失败: %w", err)
 	}
@@ -154,9 +159,36 @@ func (o *OTPAlgorithm) DecryptFromFile(inputFile, outputFile, keyPath string, ch
 
 // DecryptFromFileWithProgress OTP流式解密从文件（带进度回调）
 func (o *OTPAlgorithm) DecryptFromFileWithProgress(inputFile, outputFile, keyPath string, chunkSize int, progress ProgressFunc) (*DecryptionResult, error) {
-	fileSize, err := getFileSize(inputFile)
+	inFile, err := os.Open(inputFile)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("打开输入文件失败: %w", err)
+	}
+	defer inFile.Close()
+
+	// Detect and skip OTP header if present (new format: OTP\x00)
+	// Also supports old format files that have no header
+	header := make([]byte, 4)
+	hasHeader := false
+	if n, _ := io.ReadFull(inFile, header); n == 4 {
+		if header[0] == 'O' && header[1] == 'T' && header[2] == 'P' && header[3] == 0x00 {
+			hasHeader = true
+		}
+	}
+	if !hasHeader {
+		// Old format: no header, rewind to beginning
+		if _, err := inFile.Seek(0, io.SeekStart); err != nil {
+			return nil, fmt.Errorf("定位文件开头失败: %w", err)
+		}
+	}
+
+	// The ciphertext size is file size minus header (if present)
+	fileInfo, err := inFile.Stat()
+	if err != nil {
+		return nil, fmt.Errorf("获取文件信息失败: %w", err)
+	}
+	ciphertextSize := fileInfo.Size()
+	if hasHeader {
+		ciphertextSize -= 4
 	}
 
 	// 判断密钥文件格式并验证大小
@@ -164,15 +196,9 @@ func (o *OTPAlgorithm) DecryptFromFileWithProgress(inputFile, outputFile, keyPat
 	if err != nil {
 		return nil, err
 	}
-	if keyByteSize != fileSize {
-		return nil, fmt.Errorf("密钥长度(%d)与文件大小(%d)不匹配", keyByteSize, fileSize)
+	if keyByteSize != ciphertextSize {
+		return nil, fmt.Errorf("密钥长度(%d)与文件大小(%d)不匹配", keyByteSize, ciphertextSize)
 	}
-
-	inFile, err := os.Open(inputFile)
-	if err != nil {
-		return nil, fmt.Errorf("打开输入文件失败: %w", err)
-	}
-	defer inFile.Close()
 
 	keyFile, err := os.Open(keyPath)
 	if err != nil {
@@ -225,7 +251,7 @@ func (o *OTPAlgorithm) DecryptFromFileWithProgress(inputFile, outputFile, keyPat
 
 			totalProcessed += int64(n)
 			if progress != nil {
-				progress(totalProcessed, fileSize)
+				progress(totalProcessed, ciphertextSize)
 			}
 		}
 		if readErr == io.EOF {
@@ -308,13 +334,4 @@ func xorBytes(a, b []byte) []byte {
 		result[i] = a[i] ^ b[i]
 	}
 	return result
-}
-
-// getFileSize 获取文件大小
-func getFileSize(path string) (int64, error) {
-	info, err := os.Stat(path)
-	if err != nil {
-		return 0, fmt.Errorf("获取文件信息失败: %w", err)
-	}
-	return info.Size(), nil
 }

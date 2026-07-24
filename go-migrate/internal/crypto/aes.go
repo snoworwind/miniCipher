@@ -189,17 +189,27 @@ func (a *AES256Algorithm) EncryptToFileWithProgress(inputFile, outputFile string
 	defer outFile.Close()
 
 	// 写入文件头
-	outFile.Write([]byte{'A', 'E', 'S', byte(AESVersionChunked)})
-	if kt == KeyTypePassword {
-		outFile.Write([]byte{byte(len(salt))})
-		outFile.Write(salt)
+	if _, err := outFile.Write([]byte{'A', 'E', 'S', byte(AESVersionChunked)}); err != nil {
+		return nil, fmt.Errorf("写入文件头失败: %w", err)
 	}
-	outFile.Write(baseIV)
+	if kt == KeyTypePassword {
+		if _, err := outFile.Write([]byte{byte(len(salt))}); err != nil {
+			return nil, fmt.Errorf("写入盐值长度失败: %w", err)
+		}
+		if _, err := outFile.Write(salt); err != nil {
+			return nil, fmt.Errorf("写入盐值失败: %w", err)
+		}
+	}
+	if _, err := outFile.Write(baseIV); err != nil {
+		return nil, fmt.Errorf("写入IV失败: %w", err)
+	}
 
 	// 写入 chunkSize（4字节 big-endian）
 	chunkSizeBuf := make([]byte, 4)
 	binary.BigEndian.PutUint32(chunkSizeBuf, uint32(chunkSize))
-	outFile.Write(chunkSizeBuf)
+	if _, err := outFile.Write(chunkSizeBuf); err != nil {
+		return nil, fmt.Errorf("写入块大小失败: %w", err)
+	}
 
 	// 分块读取、加密、写入
 	buf := make([]byte, chunkSize)
@@ -220,10 +230,14 @@ func (a *AES256Algorithm) EncryptToFileWithProgress(inputFile, outputFile string
 			// 写入块长度（仅密文长度，不含 tag）
 			ciphertextLen := len(sealed) - AESTagLength
 			binary.BigEndian.PutUint32(lenBuf, uint32(ciphertextLen))
-			outFile.Write(lenBuf)
+			if _, err := outFile.Write(lenBuf); err != nil {
+				return nil, fmt.Errorf("写入块长度失败: %w", err)
+			}
 
 			// 写入密文 + tag
-			outFile.Write(sealed)
+			if _, err := outFile.Write(sealed); err != nil {
+				return nil, fmt.Errorf("写入密文块失败: %w", err)
+			}
 
 			chunkIndex++
 			totalProcessed += int64(n)
@@ -469,6 +483,14 @@ func (a *AES256Algorithm) decryptChunked(f *os.File, outputFile string,
 			}
 			ciphertextLen := binary.BigEndian.Uint32(lenBuf)
 
+			// Sanity check: chunk ciphertext must not exceed expected bounds
+			// (plaintext + GCM overhead). Reject obviously malformed input.
+			if ciphertextLen > uint32(chunkSize)+AESTagLength {
+				decryptOK = false
+				lastErr = fmt.Errorf("块 %d 长度异常 (%d 字节)，文件可能已损坏", chunkIndex, ciphertextLen)
+				break
+			}
+
 			chunkBuf := make([]byte, int(ciphertextLen)+AESTagLength)
 			if _, err := io.ReadFull(f, chunkBuf); err != nil {
 				decryptOK = false
@@ -573,10 +595,16 @@ func SaveKeyFileWithIVTag(path string, key, iv, tag []byte) error {
 		return err
 	}
 	defer f.Close()
-	f.Write(key) // 32 bytes
-	f.Write(iv)  // 12 bytes
+	if _, err := f.Write(key); err != nil {
+		return fmt.Errorf("写入密钥失败: %w", err)
+	}
+	if _, err := f.Write(iv); err != nil {
+		return fmt.Errorf("写入IV失败: %w", err)
+	}
 	if len(tag) == AESTagLength {
-		f.Write(tag) // 16 bytes
+		if _, err := f.Write(tag); err != nil {
+			return fmt.Errorf("写入标签失败: %w", err)
+		}
 	}
 	return nil
 }
