@@ -64,12 +64,13 @@ func (o *OTPAlgorithm) Decrypt(ciphertext, key []byte) (*DecryptionResult, error
 
 // EncryptToFile OTP流式加密到文件
 // 密钥分块生成并直接写入密钥文件，不保留完整密钥在内存中
-// keyFilePath: 密钥文件输出路径（hex 文本格式）
+// keyFilePath: 密钥文件输出路径（根据扩展名自动选择 hex 或 binary 格式）
 func (o *OTPAlgorithm) EncryptToFile(inputFile, outputFile, keyFilePath string, chunkSize int) (*EncryptionResult, error) {
 	return o.EncryptToFileWithProgress(inputFile, outputFile, keyFilePath, chunkSize, nil)
 }
 
 // EncryptToFileWithProgress OTP流式加密到文件（带进度回调）
+// keyFilePath 扩展名决定密钥格式: .bin → 二进制, 其他 → hex 文本
 func (o *OTPAlgorithm) EncryptToFileWithProgress(inputFile, outputFile, keyFilePath string, chunkSize int, progress ProgressFunc) (*EncryptionResult, error) {
 	inFile, err := os.Open(inputFile)
 	if err != nil {
@@ -101,11 +102,20 @@ func (o *OTPAlgorithm) EncryptToFileWithProgress(inputFile, outputFile, keyFileP
 	}
 	defer keyFile.Close()
 
+	// 根据密钥文件扩展名选择格式
+	useBinaryKey := false
+	if len(keyFilePath) > 4 && keyFilePath[len(keyFilePath)-4:] == ".bin" {
+		useBinaryKey = true
+	}
+
 	// 分块生成密钥、读取、加密、写入
 	// 不保留完整密钥在内存中
 	buf := make([]byte, chunkSize)
 	keyBuf := make([]byte, chunkSize)
-	hexBuf := make([]byte, chunkSize*2) // hex 编码缓冲区（每个字节 = 2 hex 字符）
+	var hexBuf []byte
+	if !useBinaryKey {
+		hexBuf = make([]byte, chunkSize*2) // hex 编码缓冲区（每个字节 = 2 hex 字符）
+	}
 	var totalProcessed int64
 
 	for {
@@ -123,10 +133,16 @@ func (o *OTPAlgorithm) EncryptToFileWithProgress(inputFile, outputFile, keyFileP
 				return nil, fmt.Errorf("写入加密数据失败: %w", writeErr)
 			}
 
-			// 将密钥块以 hex 格式追加到密钥文件
-			hexLen := hex.Encode(hexBuf, chunkKey)
-			if _, writeErr := keyFile.Write(hexBuf[:hexLen]); writeErr != nil {
-				return nil, fmt.Errorf("写入密钥文件失败: %w", writeErr)
+			// 将密钥块写入密钥文件（根据格式选择 hex 或 binary）
+			if useBinaryKey {
+				if _, writeErr := keyFile.Write(chunkKey); writeErr != nil {
+					return nil, fmt.Errorf("写入密钥文件失败: %w", writeErr)
+				}
+			} else {
+				hexLen := hex.Encode(hexBuf, chunkKey)
+				if _, writeErr := keyFile.Write(hexBuf[:hexLen]); writeErr != nil {
+					return nil, fmt.Errorf("写入密钥文件失败: %w", writeErr)
+				}
 			}
 
 			totalProcessed += int64(n)

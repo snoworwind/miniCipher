@@ -84,6 +84,11 @@ go-migrate/dist/
 # Go build outputs (bin directory)
 go-migrate/bin/
 
+# Go test binaries and coverage
+*.test
+go-migrate/coverage.out
+go-migrate/coverage.html
+
 # Temporary files
 *.tmp
 *.temp

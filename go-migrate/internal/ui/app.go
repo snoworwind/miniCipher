@@ -5,6 +5,7 @@ import (
 	"image/color"
 	"path/filepath"
 	"strconv"
+	"sync"
 	"time"
 
 	"fyne.io/fyne/v2"
@@ -55,6 +56,11 @@ type App struct {
 	batchMaxThreadsEntry *widget.Entry
 	batchModeSelect      *widget.Select
 	batchProcessor       *batch.BatchProcessor
+
+	// progressMu protects Fyne widget updates from concurrent batch progress callbacks.
+	// Fyne widgets should only be accessed from the main goroutine; this mutex
+	// serializes access from worker goroutines to prevent data races.
+	progressMu sync.Mutex
 }
 
 // NewApp 创建GUI应用
@@ -634,7 +640,7 @@ func (a *App) doBatch(isEncrypt bool) {
 	preserveStruct := a.batchPreserveCheck.Checked
 	maxThreads := 1 // 默认串行
 	if a.batchParallelCheck.Checked {
-		if n, err := strconv.Atoi(a.batchMaxThreadsEntry.Text); err == nil && n >= 1 && n <= 16 {
+		if n, err := strconv.Atoi(a.batchMaxThreadsEntry.Text); err == nil && n >= 1 && n <= 64 {
 			maxThreads = n
 		} else {
 			maxThreads = a.cfg.Batch.MaxThreads
@@ -666,6 +672,12 @@ func (a *App) doBatch(isEncrypt bool) {
 }
 
 func (a *App) onBatchProgress(p batch.Progress) {
+	// Serialize Fyne widget updates — batch progress callbacks may arrive
+	// from multiple worker goroutines concurrently (progress reader goroutine
+	// and the final Process goroutine).
+	a.progressMu.Lock()
+	defer a.progressMu.Unlock()
+
 	if p.Done {
 		a.batchProgress.SetValue(1)
 		return

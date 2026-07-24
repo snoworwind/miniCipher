@@ -13,6 +13,8 @@ import (
 	"strings"
 
 	"golang.org/x/crypto/pbkdf2"
+
+	"github.com/snoworwind/minicipher/internal/log"
 )
 
 // AES256Algorithm AES256-GCM算法实现
@@ -438,8 +440,14 @@ func (a *AES256Algorithm) decryptChunked(f *os.File, outputFile string,
 		return nil, fmt.Errorf("读取块大小失败: %w", err)
 	}
 	hdr.fileChunkSize = binary.BigEndian.Uint32(fileChunkSizeBuf)
-	// Validate and use the file's chunk size
+	// Validate and use the file's chunk size.
+	// The file's chunk size takes precedence — this ensures correct decryption
+	// even when the caller requests a different buffer size than what was used
+	// during encryption.
 	if int(hdr.fileChunkSize) != chunkSize && int(hdr.fileChunkSize) > 0 {
+		log.Debug("AES chunk size mismatch, using file value",
+			"requested", chunkSize,
+			"file_chunk_size", hdr.fileChunkSize)
 		chunkSize = int(hdr.fileChunkSize)
 	}
 

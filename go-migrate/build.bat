@@ -76,28 +76,36 @@ echo [BUILD] Cross-compiling for all platforms...
 if not exist bin mkdir bin
 
 echo   Windows amd64...
-set "GOOS=windows" && set "GOARCH=amd64" && go build %GO_TRIM% -ldflags="%GO_LDFLAGS% -H windowsgui" -o bin\minicipher-windows-amd64.exe .\cmd\minicipher\
+set "GOOS=windows"
+set "GOARCH=amd64"
+go build %GO_TRIM% -ldflags="%GO_LDFLAGS% -H windowsgui" -o bin\minicipher-windows-amd64.exe .\cmd\minicipher\
 if %ERRORLEVEL% neq 0 (
     echo [FAIL] Windows amd64 build failed.
     exit /b 1
 )
 
 echo   Darwin amd64...
-set "GOOS=darwin" && set "GOARCH=amd64" && go build %GO_TRIM% -ldflags="%GO_LDFLAGS%" -o bin\minicipher-darwin-amd64 .\cmd\minicipher\
+set "GOOS=darwin"
+set "GOARCH=amd64"
+go build %GO_TRIM% -ldflags="%GO_LDFLAGS%" -o bin\minicipher-darwin-amd64 .\cmd\minicipher\
 if %ERRORLEVEL% neq 0 (
     echo [FAIL] Darwin amd64 build failed.
     exit /b 1
 )
 
 echo   Darwin arm64...
-set "GOOS=darwin" && set "GOARCH=arm64" && go build %GO_TRIM% -ldflags="%GO_LDFLAGS%" -o bin\minicipher-darwin-arm64 .\cmd\minicipher\
+set "GOOS=darwin"
+set "GOARCH=arm64"
+go build %GO_TRIM% -ldflags="%GO_LDFLAGS%" -o bin\minicipher-darwin-arm64 .\cmd\minicipher\
 if %ERRORLEVEL% neq 0 (
     echo [FAIL] Darwin arm64 build failed.
     exit /b 1
 )
 
 echo   Linux amd64...
-set "GOOS=linux" && set "GOARCH=amd64" && go build %GO_TRIM% -ldflags="%GO_LDFLAGS%" -o bin\minicipher-linux-amd64 .\cmd\minicipher\
+set "GOOS=linux"
+set "GOARCH=amd64"
+go build %GO_TRIM% -ldflags="%GO_LDFLAGS%" -o bin\minicipher-linux-amd64 .\cmd\minicipher\
 if %ERRORLEVEL% neq 0 (
     echo [FAIL] Linux amd64 build failed.
     exit /b 1

@@ -96,6 +96,10 @@ type BatchProcessor struct {
 }
 
 // New 创建批量处理器
+//
+// 内存注意事项：并行处理时，每个工作协程分配一份 chunkSize 大小的缓冲区，
+// 峰值内存 ≈ maxWorkers × chunkSize。例如 4 线程 × 100MB = 400MB。
+// 请根据系统可用内存选择合适的线程数和缓冲区大小。
 func New(maxWorkers int, chunkSizeMB int) *BatchProcessor {
 	if maxWorkers <= 0 {
 		maxWorkers = 4
@@ -227,11 +231,15 @@ func (bp *BatchProcessor) Process(op OperationType, mode Mode, paths []string, o
 				// 在线程安全的 AddResult 之前发送进度，避免持有锁时发送 channel
 				result.AddResult(fr)
 
-				// 发送进度（不持有锁）
-				progressCh <- Progress{
+				// Non-blocking send: drop the progress update if the channel is full.
+				// Worker throughput takes priority over progress reporting granularity.
+				select {
+				case progressCh <- Progress{
 					CurrentName:   filepath.Base(t.path),
 					ProcessedSize: fr.FileSize,
 					Done:          false,
+				}:
+				default:
 				}
 			}
 		}()
@@ -262,6 +270,7 @@ func (bp *BatchProcessor) Process(op OperationType, mode Mode, paths []string, o
 func (bp *BatchProcessor) collectFiles(paths []string, op OperationType, mode Mode) ([]string, int64, error) {
 	var files []string
 	var totalSize int64
+	var pathErrors []string // accumulate errors for non-existent paths
 
 	// 排除扩展名和文件名（仅排除明确的临时文件和系统文件）
 	excludeExtensions := map[string]bool{
@@ -282,6 +291,7 @@ func (bp *BatchProcessor) collectFiles(paths []string, op OperationType, mode Mo
 	for _, path := range paths {
 		info, err := os.Stat(path)
 		if err != nil {
+			pathErrors = append(pathErrors, fmt.Sprintf("%s: %v", path, err))
 			continue
 		}
 		if info.IsDir() {

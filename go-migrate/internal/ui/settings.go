@@ -304,7 +304,7 @@ func (sd *SettingsDialog) collectValues() *config.Config {
 	// Batch
 	newCfg.Batch = sd.cfg.Batch
 	newCfg.Batch.ParallelProcessing = sd.parallelCheck.Checked
-	if v, err := strconv.Atoi(sd.maxThreadsEntry.Text); err == nil && v >= 1 && v <= 16 {
+	if v, err := strconv.Atoi(sd.maxThreadsEntry.Text); err == nil && v >= 1 && v <= 64 {
 		newCfg.Batch.MaxThreads = v
 	} else {
 		newCfg.Batch.MaxThreads = sd.cfg.Batch.MaxThreads

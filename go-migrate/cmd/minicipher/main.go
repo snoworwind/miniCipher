@@ -105,8 +105,9 @@ func printUsage() {
 }
 
 // readPassword reads password from the specified source.
+// Priority: stdin > env var > cliPassword (deprecated --password= flag).
 // Returns []byte so the caller can zero the buffer after use.
-func readPassword(passwordStdin bool, passwordEnv string, args []string) ([]byte, error) {
+func readPassword(passwordStdin bool, passwordEnv string, cliPassword string) ([]byte, error) {
 	// Priority 1: stdin (most secure, no shell history)
 	if passwordStdin {
 		reader := bufio.NewReader(os.Stdin)
@@ -131,12 +132,10 @@ func readPassword(passwordStdin bool, passwordEnv string, args []string) ([]byte
 	}
 
 	// Priority 3: deprecated --password= flag (kept for backwards compat with warning)
-	for _, arg := range args {
-		if strings.HasPrefix(arg, "--password=") {
-			fmt.Fprintln(os.Stderr, translator.T("warn.password_cli"))
-			fmt.Fprintln(os.Stderr, translator.T("warn.password_cli_hint"))
-			return []byte(arg[11:]), nil
-		}
+	if cliPassword != "" {
+		fmt.Fprintln(os.Stderr, translator.T("warn.password_cli"))
+		fmt.Fprintln(os.Stderr, translator.T("warn.password_cli_hint"))
+		return []byte(cliPassword), nil
 	}
 
 	return nil, fmt.Errorf("%s", translator.Tf("error.no_password"))
@@ -215,7 +214,7 @@ func handleEncrypt(args []string) {
 		}
 
 		var err error
-		password, err = readPassword(passwordStdin, passwordEnv, args[2:])
+		password, err = readPassword(passwordStdin, passwordEnv, parsed["--password"])
 		if err != nil || len(password) == 0 {
 			fmt.Fprintf(os.Stderr, "%v\n", err)
 			fmt.Fprintf(os.Stderr, "%s\n", translator.Tf("hint.password_usage", os.Args[0]))
@@ -304,7 +303,7 @@ func handleDecrypt(args []string) {
 	var password []byte
 	if passwordStdin || passwordEnv != "" {
 		var pwdErr error
-		password, pwdErr = readPassword(passwordStdin, passwordEnv, args[2:])
+		password, pwdErr = readPassword(passwordStdin, passwordEnv, parsed["--password"])
 		if pwdErr != nil {
 			fmt.Fprintf(os.Stderr, "%v\n", pwdErr)
 			os.Exit(1)
@@ -421,7 +420,7 @@ func handleBatch(args []string) {
 			}
 		}
 
-		pwd, err := readPassword(passwordStdin, passwordEnv, args[3:])
+		pwd, err := readPassword(passwordStdin, passwordEnv, parsed["--password"])
 		if err != nil || len(pwd) == 0 {
 			fmt.Fprintf(os.Stderr, "%v\n", err)
 			os.Exit(1)

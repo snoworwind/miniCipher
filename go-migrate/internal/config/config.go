@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"sync"
 )
 
 // Config 应用配置
@@ -87,8 +88,9 @@ func DefaultConfig() *Config {
 	}
 }
 
-// Manager 配置管理器
+// Manager 配置管理器（线程安全）
 type Manager struct {
+	mu         sync.RWMutex
 	configDir  string
 	configFile string
 	config     *Config
@@ -102,6 +104,9 @@ func NewManager() *Manager {
 // Load 加载配置（如果不存在则使用默认配置）
 // 采用深度合并策略：先用默认配置填充，再用文件内容覆盖非零字段
 func (m *Manager) Load() (*Config, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
 	configDir, err := getConfigDir()
 	if err != nil {
 		return nil, fmt.Errorf("获取配置目录失败: %w", err)
@@ -151,30 +156,36 @@ func (m *Manager) Load() (*Config, error) {
 }
 
 // deepMergeJSON 深度合并 JSON 数据到配置结构体
-// 先用默认配置值填充，再解析 JSON 并只覆盖文件中明确指定的字段
+// config 已由 DefaultConfig() 预填充默认值；仅覆盖文件中明确指定的字段。
+// 对于 bool 字段，检查 JSON 键是否存在以区分"未设置"和"设置为 false"。
 func deepMergeJSON(config *Config, data []byte) error {
-	// 先解析到临时 map 中检查哪些字段存在
 	var raw map[string]json.RawMessage
 	if err := json.Unmarshal(data, &raw); err != nil {
 		return err
 	}
 
-	// 仅当版本字段存在时覆盖
-	if v, ok := raw["version"]; ok {
-		if err := json.Unmarshal(v, &config.Version); err != nil {
-			// Keep default; malformed field is non-fatal
+	// keyExists checks whether a key is present in a raw JSON object.
+	keyExists := func(rawJSON json.RawMessage, key string) bool {
+		var m map[string]json.RawMessage
+		if err := json.Unmarshal(rawJSON, &m); err != nil {
+			return false
 		}
-	}
-	if v, ok := raw["debug"]; ok {
-		if err := json.Unmarshal(v, &config.Debug); err != nil {
-			// Keep default; malformed field is non-fatal
-		}
+		_, ok := m[key]
+		return ok
 	}
 
-	// UI 子配置合并
-	if uiRaw, ok := raw["ui"]; ok {
+	// Top-level fields
+	if v, ok := raw["version"]; ok {
+		json.Unmarshal(v, &config.Version)
+	}
+	if v, ok := raw["debug"]; ok {
+		json.Unmarshal(v, &config.Debug)
+	}
+
+	// UI section
+	if v, ok := raw["ui"]; ok {
 		var ui UIConfig
-		if json.Unmarshal(uiRaw, &ui) == nil {
+		if json.Unmarshal(v, &ui) == nil {
 			if ui.Language != "" {
 				config.UI.Language = ui.Language
 			}
@@ -184,10 +195,10 @@ func deepMergeJSON(config *Config, data []byte) error {
 		}
 	}
 
-	// Crypto 子配置合并
-	if cryptoRaw, ok := raw["crypto"]; ok {
+	// Crypto section
+	if v, ok := raw["crypto"]; ok {
 		var c CryptoConfig
-		if json.Unmarshal(cryptoRaw, &c) == nil {
+		if json.Unmarshal(v, &c) == nil {
 			if c.DefaultAlgorithm != "" {
 				config.Crypto.DefaultAlgorithm = c.DefaultAlgorithm
 			}
@@ -197,36 +208,24 @@ func deepMergeJSON(config *Config, data []byte) error {
 			if c.PasswordMinLength > 0 {
 				config.Crypto.PasswordMinLength = c.PasswordMinLength
 			}
-			// RequireStrongPass 是 bool 型，需要特殊处理
-			// 注意：bool 零值是 false，无法区分"未设置"和"设置为 false"
-			var cryptoMap map[string]json.RawMessage
-			if json.Unmarshal(cryptoRaw, &cryptoMap) == nil {
-				if _, exists := cryptoMap["require_strong_password"]; exists {
-					config.Crypto.RequireStrongPass = c.RequireStrongPass
-				}
-			}
 			if c.OTPKeyFormat != "" {
 				config.Crypto.OTPKeyFormat = c.OTPKeyFormat
+			}
+			if keyExists(v, "require_strong_password") {
+				config.Crypto.RequireStrongPass = c.RequireStrongPass
 			}
 		}
 	}
 
-	// Paths 子配置合并
-	if pathsRaw, ok := raw["paths"]; ok {
+	// Paths section
+	if v, ok := raw["paths"]; ok {
 		var p PathsConfig
-		if json.Unmarshal(pathsRaw, &p) == nil {
+		if json.Unmarshal(v, &p) == nil {
 			if p.DefaultInputDir != "" {
 				config.Paths.DefaultInputDir = p.DefaultInputDir
 			}
 			if p.DefaultOutputDir != "" {
 				config.Paths.DefaultOutputDir = p.DefaultOutputDir
-			}
-			// RememberLastFolder 是 bool 型
-			var pathsMap map[string]json.RawMessage
-			if json.Unmarshal(pathsRaw, &pathsMap) == nil {
-				if _, exists := pathsMap["remember_last_folder"]; exists {
-					config.Paths.RememberLastFolder = p.RememberLastFolder
-				}
 			}
 			if p.LastInputFolder != "" {
 				config.Paths.LastInputFolder = p.LastInputFolder
@@ -234,33 +233,32 @@ func deepMergeJSON(config *Config, data []byte) error {
 			if p.LastOutputFolder != "" {
 				config.Paths.LastOutputFolder = p.LastOutputFolder
 			}
+			if keyExists(v, "remember_last_folder") {
+				config.Paths.RememberLastFolder = p.RememberLastFolder
+			}
 		}
 	}
 
-	// Batch 子配置合并
-	if batchRaw, ok := raw["batch"]; ok {
+	// Batch section
+	if v, ok := raw["batch"]; ok {
 		var b BatchConfig
-		if json.Unmarshal(batchRaw, &b) == nil {
-			// 区分未设置和设置为 false
-			var batchMap map[string]json.RawMessage
-			if json.Unmarshal(batchRaw, &batchMap) == nil {
-				if _, exists := batchMap["parallel_processing"]; exists {
-					config.Batch.ParallelProcessing = b.ParallelProcessing
-				}
-				if _, exists := batchMap["preserve_structure"]; exists {
-					config.Batch.PreserveStructure = b.PreserveStructure
-				}
-			}
+		if json.Unmarshal(v, &b) == nil {
 			if b.MaxThreads > 0 {
 				config.Batch.MaxThreads = b.MaxThreads
 			}
+			if keyExists(v, "parallel_processing") {
+				config.Batch.ParallelProcessing = b.ParallelProcessing
+			}
+			if keyExists(v, "preserve_structure") {
+				config.Batch.PreserveStructure = b.PreserveStructure
+			}
 		}
 	}
 
-	// Advanced 子配置合并
-	if advRaw, ok := raw["advanced"]; ok {
+	// Advanced section
+	if v, ok := raw["advanced"]; ok {
 		var a AdvancedConfig
-		if json.Unmarshal(advRaw, &a) == nil {
+		if json.Unmarshal(v, &a) == nil {
 			if a.BufferSize > 0 {
 				config.Advanced.BufferSize = a.BufferSize
 			}
@@ -273,8 +271,15 @@ func deepMergeJSON(config *Config, data []byte) error {
 	return nil
 }
 
-// Save 保存配置
+// Save 保存配置到磁盘（线程安全）
 func (m *Manager) Save() error {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	return m.saveLocked()
+}
+
+// saveLocked 保存配置（调用者必须持有至少读锁）
+func (m *Manager) saveLocked() error {
 	if m.config == nil {
 		return fmt.Errorf("配置未加载")
 	}
@@ -290,18 +295,24 @@ func (m *Manager) Save() error {
 	return nil
 }
 
-// Get 获取当前配置
+// Get 获取当前配置（返回指针，调用者不应修改）
 func (m *Manager) Get() *Config {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
 	return m.config
 }
 
-// Replace 替换当前配置（线程安全，用于设置对话框）
+// Replace 原子替换当前配置（线程安全，用于设置对话框）
 func (m *Manager) Replace(newConfig *Config) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
 	m.config = newConfig
 }
 
 // GetDefaultAlgorithm 获取默认算法
 func (m *Manager) GetDefaultAlgorithm() string {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
 	if m.config != nil {
 		return m.config.Crypto.DefaultAlgorithm
 	}
@@ -310,6 +321,8 @@ func (m *Manager) GetDefaultAlgorithm() string {
 
 // GetDefaultKeyType 获取默认密钥类型
 func (m *Manager) GetDefaultKeyType() string {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
 	if m.config != nil {
 		return m.config.Crypto.DefaultKeyType
 	}
@@ -318,6 +331,8 @@ func (m *Manager) GetDefaultKeyType() string {
 
 // GetBufferSizeMB 获取缓冲区大小（MB）
 func (m *Manager) GetBufferSizeMB() int {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
 	if m.config != nil && m.config.Advanced.BufferSize > 0 {
 		return m.config.Advanced.BufferSize
 	}
@@ -326,6 +341,8 @@ func (m *Manager) GetBufferSizeMB() int {
 
 // SetBufferSizeMB 设置缓冲区大小（MB）
 func (m *Manager) SetBufferSizeMB(size int) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
 	if m.config == nil {
 		return fmt.Errorf("配置未加载")
 	}
@@ -333,11 +350,13 @@ func (m *Manager) SetBufferSizeMB(size int) error {
 		return fmt.Errorf("缓冲区大小必须在 1-100 MB 之间")
 	}
 	m.config.Advanced.BufferSize = size
-	return m.Save()
+	return m.saveLocked()
 }
 
 // GetLanguage 获取当前语言
 func (m *Manager) GetLanguage() string {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
 	if m.config != nil && m.config.UI.Language != "" {
 		return m.config.UI.Language
 	}
@@ -346,15 +365,19 @@ func (m *Manager) GetLanguage() string {
 
 // SetLanguage 设置语言
 func (m *Manager) SetLanguage(lang string) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
 	if m.config == nil {
 		return fmt.Errorf("配置未加载")
 	}
 	m.config.UI.Language = lang
-	return m.Save()
+	return m.saveLocked()
 }
 
 // GetTheme 获取当前主题
 func (m *Manager) GetTheme() string {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
 	if m.config != nil && m.config.UI.Theme != "" {
 		return m.config.UI.Theme
 	}
