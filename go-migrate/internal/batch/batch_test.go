@@ -123,7 +123,9 @@ func TestShouldIncludeFile(t *testing.T) {
 
 	t.Run("exclude non-enc when decrypting", func(t *testing.T) {
 		path := filepath.Join(tmpDir, "readme.txt")
-		os.WriteFile(path, []byte("hello"), 0644)
+		if err := os.WriteFile(path, []byte("hello"), 0644); err != nil {
+				t.Fatalf("写入测试文件失败: %v", err)
+			}
 		info, _ := os.Stat(path)
 		if bp.shouldIncludeFile(path, info, OpDecrypt, excludeExts, excludeNames) {
 			t.Error("non-.enc files should be excluded when decrypting")
@@ -132,7 +134,9 @@ func TestShouldIncludeFile(t *testing.T) {
 
 	t.Run("exclude empty files", func(t *testing.T) {
 		path := filepath.Join(tmpDir, "empty.txt")
-		os.WriteFile(path, []byte{}, 0644)
+		if err := os.WriteFile(path, []byte{}, 0644); err != nil {
+				t.Fatalf("写入空测试文件失败: %v", err)
+			}
 		info, _ := os.Stat(path)
 		if bp.shouldIncludeFile(path, info, OpEncrypt, excludeExts, excludeNames) {
 			t.Error("empty files should be excluded")
@@ -141,7 +145,9 @@ func TestShouldIncludeFile(t *testing.T) {
 
 	t.Run("exclude key files when decrypting", func(t *testing.T) {
 		path := filepath.Join(tmpDir, "secret.key")
-		os.WriteFile(path, []byte("keydata"), 0644)
+		if err := os.WriteFile(path, []byte("keydata"), 0644); err != nil {
+				t.Fatalf("写入key测试文件失败: %v", err)
+			}
 		info, _ := os.Stat(path)
 		if bp.shouldIncludeFile(path, info, OpDecrypt, excludeExts, excludeNames) {
 			t.Error(".key files should be excluded when decrypting")
@@ -150,7 +156,9 @@ func TestShouldIncludeFile(t *testing.T) {
 
 	t.Run("include normal files for encryption", func(t *testing.T) {
 		path := filepath.Join(tmpDir, "doc.pdf")
-		os.WriteFile(path, []byte("pdf content"), 0644)
+		if err := os.WriteFile(path, []byte("pdf content"), 0644); err != nil {
+				t.Fatalf("写入pdf测试文件失败: %v", err)
+			}
 		info, _ := os.Stat(path)
 		if !bp.shouldIncludeFile(path, info, OpEncrypt, excludeExts, excludeNames) {
 			t.Error("normal files should be included for encryption")
@@ -208,7 +216,9 @@ func TestCollectFiles(t *testing.T) {
 		"empty.txt":  "",
 	}
 	for name, content := range files {
-		os.WriteFile(filepath.Join(tmpDir, name), []byte(content), 0644)
+		if err := os.WriteFile(filepath.Join(tmpDir, name), []byte(content), 0644); err != nil {
+				t.Fatalf("写入测试文件 %s 失败: %v", name, err)
+			}
 	}
 
 	bp := New(4, 10)
@@ -255,11 +265,15 @@ func TestFindMatchingKeyFile(t *testing.T) {
 
 	// Create a test encrypted file and matching key
 	encPath := filepath.Join(tmpDir, "secret.txt.enc")
-	os.WriteFile(encPath, []byte("encrypted"), 0644)
+	if err := os.WriteFile(encPath, []byte("encrypted"), 0644); err != nil {
+		t.Fatalf("写入加密测试文件失败: %v", err)
+	}
 
 	// Create the key file using the standard naming
 	keyPath := crypto.BuildKeyFilePath(tmpDir, "secret.txt", crypto.AlgorithmOTP, crypto.KeyTypeRandom, "hex")
-	os.WriteFile(keyPath, []byte("aabbccdd"), 0644)
+	if err := os.WriteFile(keyPath, []byte("aabbccdd"), 0644); err != nil {
+		t.Fatalf("写入key测试文件失败: %v", err)
+	}
 
 	result := findMatchingKeyFile(encPath, tmpDir, crypto.AlgorithmOTP, crypto.KeyTypeRandom)
 	if result == "" {
