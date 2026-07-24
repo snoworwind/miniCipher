@@ -293,7 +293,9 @@ func TestOTPKeyFormatDetection(t *testing.T) {
 
 	// Create a file with no extension that has binary content
 	noExtBinPath := filepath.Join(tmpDir, "keyfile_bin")
-	os.WriteFile(noExtBinPath, binData, 0644)
+	if err := os.WriteFile(noExtBinPath, binData, 0644); err != nil {
+		t.Fatalf("写入无扩展名binary密钥文件失败: %v", err)
+	}
 
 	format, byteSize, err = detectOTPKeyFormat(noExtBinPath)
 	if err != nil {
@@ -336,7 +338,9 @@ func TestOTPHexKeyWithWhitespace(t *testing.T) {
 	}
 	keyWithNewline := append(keyData, '\n')
 	keyPathNewline := filepath.Join(tmpDir, "key_with_newline.txt")
-	os.WriteFile(keyPathNewline, keyWithNewline, 0644)
+	if err := os.WriteFile(keyPathNewline, keyWithNewline, 0644); err != nil {
+		t.Fatalf("写入带换行密钥文件失败: %v", err)
+	}
 
 	// Decrypt with key file that has trailing whitespace
 	_, err = otp.DecryptFromFile(encPath, decPath, keyPathNewline, 10*1024*1024)
@@ -422,7 +426,9 @@ func TestOTPKeyFileSizeMismatch(t *testing.T) {
 
 	// Create a deliberately wrong-sized key file
 	wrongKeyPath := filepath.Join(tmpDir, "wrong_key.txt")
-	os.WriteFile(wrongKeyPath, []byte("aabb"), 0644) // 2 bytes, but need len(testContent) bytes
+	if err := os.WriteFile(wrongKeyPath, []byte("aabb"), 0644); err != nil {
+		t.Fatalf("写入错误大小密钥文件失败: %v", err)
+	}
 
 	_, err = otp.DecryptFromFile(encPath, decPath, wrongKeyPath, 10*1024*1024)
 	if err == nil {
