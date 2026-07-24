@@ -123,12 +123,11 @@ jobs:
       - name: Test
         run: go test ./... -v -count=1
 
+      - name: Install golangci-lint
+        run: go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest
+
       - name: Lint (golangci-lint)
-        uses: golangci/golangci-lint-action@v6
-        with:
-          version: latest
-          working-directory: go-migrate
-          args: --timeout=5m
+        run: golangci-lint run --timeout=5m ./...
 
   summary:
     runs-on: ubuntu-latest
