@@ -567,7 +567,10 @@ func runTests() {
 
 	testFilePath := filepath.Join(tmpDir, "test.txt")
 	testContent := []byte("This is a file encryption test!\n第二行中文内容。")
-	os.WriteFile(testFilePath, testContent, 0644)
+	if err := os.WriteFile(testFilePath, testContent, 0644); err != nil {
+		fmt.Printf("❌ 写入测试文件失败: %v\n", err)
+		os.Exit(1)
+	}
 
 	encFilePath := filepath.Join(tmpDir, "test.txt.enc")
 	fileResult, err := aes.EncryptToFile(testFilePath, encFilePath, crypto.KeyTypeRandom, nil, nil, 10*1024*1024)
