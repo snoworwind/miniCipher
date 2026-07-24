@@ -6,6 +6,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 
@@ -15,6 +16,7 @@ import (
 	"github.com/snoworwind/minicipher/internal/config"
 	"github.com/snoworwind/minicipher/internal/crypto"
 	"github.com/snoworwind/minicipher/internal/lang"
+	"github.com/snoworwind/minicipher/internal/log"
 	"github.com/snoworwind/minicipher/internal/platform"
 	"github.com/snoworwind/minicipher/internal/ui"
 )
@@ -44,9 +46,10 @@ func runGUI() {
 	// If debug mode is enabled, open a console window (Windows only)
 	if cfg.Debug {
 		platform.AttachOrAllocConsole()
-		fmt.Println("[miniCipher] 调试模式已启用")
-		fmt.Printf("[miniCipher] 配置: %+v\n", cfg)
+		log.Setup(cfg.Advanced.LogLevel, true)
+		log.Debug("调试模式已启用", "config", cfg)
 	}
+	// GUI mode without debug: DefaultLogger remains NoOpLogger (silent)
 
 	guiApp := ui.NewApp(cfgMgr, fApp)
 	guiApp.Run()
@@ -68,6 +71,9 @@ func runCLI() {
 		fmt.Fprintf(os.Stderr, "加载配置失败: %v\n", err)
 		os.Exit(1)
 	}
+
+	// Initialize structured logger for CLI mode
+	log.Setup(cfg.Advanced.LogLevel, cfg.Debug)
 
 	translator = lang.NewTranslator(cfg.UI.Language)
 
@@ -210,20 +216,22 @@ func handleEncrypt(args []string) {
 
 	chunkSize := cfgMgr.GetBufferSizeMB() * 1024 * 1024
 
+	outputDir := filepath.Dir(outputFile)
+	inputBase := filepath.Base(inputFile)
+
 	var result *crypto.EncryptionResult
 	var err error
+	var otpKeyPath string // OTP key path, reused for notification
 
 	switch algo {
 	case "OTP":
-		otp := crypto.NewOTPAlgorithm()
-		outputDir := filepath.Dir(outputFile)
-		inputBase := filepath.Base(inputFile)
 		otpFormat := cfg.Crypto.OTPKeyFormat
 		if otpFormat == "" {
 			otpFormat = "hex"
 		}
-		keyFilePath := crypto.BuildKeyFilePath(outputDir, inputBase, crypto.AlgorithmOTP, crypto.KeyTypeRandom, otpFormat)
-		result, err = otp.EncryptToFile(inputFile, outputFile, keyFilePath, chunkSize)
+		otpKeyPath = crypto.BuildKeyFilePath(outputDir, inputBase, crypto.AlgorithmOTP, crypto.KeyTypeRandom, otpFormat)
+		otp := crypto.NewOTPAlgorithm()
+		result, err = otp.EncryptToFile(inputFile, outputFile, otpKeyPath, chunkSize)
 	case "AES256":
 		aes := crypto.NewAES256Algorithm()
 		result, err = aes.EncryptToFile(inputFile, outputFile, kt, []byte(password), nil, chunkSize)
@@ -241,21 +249,14 @@ func handleEncrypt(args []string) {
 
 	// Save key (random key mode)
 	if algo == "AES256" && kt == crypto.KeyTypeRandom {
-		keyFile := crypto.BuildKeyFilePath(filepath.Dir(outputFile), filepath.Base(inputFile), crypto.AlgorithmAES256, crypto.KeyTypeRandom, "")
+		keyFile := crypto.BuildKeyFilePath(outputDir, inputBase, crypto.AlgorithmAES256, crypto.KeyTypeRandom, "")
 		if err := crypto.SaveKeyFileWithIVTag(keyFile, result.Key, result.IV, result.Tag); err != nil {
 			fmt.Fprintf(os.Stderr, "%s\n", translator.Tf("warn.key_save", err))
 		} else {
 			fmt.Printf("密钥文件: %s (请妥善保管！)\n", keyFile)
 		}
 	} else if algo == "OTP" {
-		outputDir := filepath.Dir(outputFile)
-		inputBase := filepath.Base(inputFile)
-		otpFormat := cfg.Crypto.OTPKeyFormat
-		if otpFormat == "" {
-			otpFormat = "hex"
-		}
-		keyFilePath := crypto.BuildKeyFilePath(outputDir, inputBase, crypto.AlgorithmOTP, crypto.KeyTypeRandom, otpFormat)
-		fmt.Printf("密钥文件: %s (请妥善保管！)\n", keyFilePath)
+		fmt.Printf("密钥文件: %s (请妥善保管！)\n", otpKeyPath)
 	}
 }
 
@@ -458,7 +459,11 @@ func handleBatch(args []string) {
 
 	maxThreads := 4
 	if v, ok := parsed["--max-threads"]; ok {
-		fmt.Sscanf(v, "%d", &maxThreads)
+		if n, err := strconv.Atoi(v); err == nil && n >= 1 && n <= 64 {
+			maxThreads = n
+		} else {
+			fmt.Fprintf(os.Stderr, "警告: 无效的 --max-threads 值 %q，使用默认值 %d\n", v, maxThreads)
+		}
 	}
 	if !parallel {
 		maxThreads = 1
@@ -478,9 +483,9 @@ func handleBatch(args []string) {
 	fmt.Printf("算法: %s, 模式: %s, 并行: %v\n", algo, modeStr, parallel)
 
 	result, err := bp.Process(op, mode, []string{inputDir}, outputDir, preserveStruct,
-		algo, kt, nil, password, nil, nil, nil)
+		crypto.AlgorithmType(algo), kt, nil, password, nil, nil, nil)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "%s\n", translator.Tf("error.decryption_failed", err.Error()))
+		fmt.Fprintf(os.Stderr, "%s\n", translator.Tf("error.batch_failed", err.Error()))
 		os.Exit(1)
 	}
 

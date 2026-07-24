@@ -8,7 +8,6 @@ import (
 	"time"
 
 	"fyne.io/fyne/v2"
-	"fyne.io/fyne/v2/app"
 	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/dialog"
 	fynetheme "fyne.io/fyne/v2/theme"
@@ -18,6 +17,7 @@ import (
 	"github.com/snoworwind/minicipher/internal/config"
 	"github.com/snoworwind/minicipher/internal/crypto"
 	"github.com/snoworwind/minicipher/internal/lang"
+	"github.com/snoworwind/minicipher/internal/theme"
 )
 
 // App GUI 应用主结构
@@ -640,7 +640,7 @@ func (a *App) doBatch(isEncrypt bool) {
 		a.batchProcessor.SetProgressCallback(a.onBatchProgress)
 
 		result, err := a.batchProcessor.Process(op, batchMode, paths, outputDir, preserveStruct,
-			algo, kt, nil, []byte(password), nil, nil, nil)
+			crypto.AlgorithmType(algo), kt, nil, []byte(password), nil, nil, nil)
 		if err != nil {
 			a.batchStatusLabel.SetText(fmt.Sprintf("❌ %s", err.Error()))
 			return
@@ -732,25 +732,68 @@ func (a *App) safeRebuildUI() {
 	}
 }
 
-// forcedTheme 强制主题变体（浅色/深色）
-type forcedTheme struct {
+// brandTheme 使用 theme 包定义的品牌色 + Fyne 默认主题作为 fallback
+type brandTheme struct {
 	variant fyne.ThemeVariant
+	colors  *theme.ThemeColors
 }
 
-func (f *forcedTheme) Color(name fyne.ThemeColorName, _ fyne.ThemeVariant) color.Color {
-	return fynetheme.DefaultTheme().Color(name, f.variant)
+func (f *brandTheme) Color(name fyne.ThemeColorName, _ fyne.ThemeVariant) color.Color {
+	// Map Fyne theme color names to brand colors where applicable
+	switch name {
+	case fynetheme.ColorNameBackground:
+		return parseHexColor(f.colors.BG)
+	case fynetheme.ColorNameForeground:
+		return parseHexColor(f.colors.FG)
+	case fynetheme.ColorNamePrimary:
+		return parseHexColor(f.colors.Primary)
+	case fynetheme.ColorNameButton:
+		return parseHexColor(f.colors.ButtonBG)
+	case fynetheme.ColorNameDisabled:
+		return parseHexColor(f.colors.Disabled)
+	case fynetheme.ColorNameInputBackground:
+		return parseHexColor(f.colors.EntryBG)
+	case fynetheme.ColorNameForegroundOnPrimary:
+		return parseHexColor(f.colors.ButtonFG)
+	case fynetheme.ColorNameMenuBackground:
+		return parseHexColor(f.colors.MenuBG)
+	case fynetheme.ColorNameOverlayBackground:
+		return parseHexColor(f.colors.FrameBG)
+	default:
+		return fynetheme.DefaultTheme().Color(name, f.variant)
+	}
 }
 
-func (f *forcedTheme) Font(style fyne.TextStyle) fyne.Resource {
+func (f *brandTheme) Font(style fyne.TextStyle) fyne.Resource {
 	return fynetheme.DefaultTheme().Font(style)
 }
 
-func (f *forcedTheme) Icon(name fyne.ThemeIconName) fyne.Resource {
+func (f *brandTheme) Icon(name fyne.ThemeIconName) fyne.Resource {
 	return fynetheme.DefaultTheme().Icon(name)
 }
 
-func (f *forcedTheme) Size(name fyne.ThemeSizeName) float32 {
+func (f *brandTheme) Size(name fyne.ThemeSizeName) float32 {
 	return fynetheme.DefaultTheme().Size(name)
+}
+
+// parseHexColor 将 #RRGGBB 格式的十六进制颜色字符串解析为 color.Color
+func parseHexColor(hex string) color.Color {
+	if len(hex) == 0 || hex[0] != '#' {
+		return color.Black
+	}
+	var r, g, b uint8
+	switch len(hex) {
+	case 7: // #RRGGBB
+		fmt.Sscanf(hex, "#%02x%02x%02x", &r, &g, &b)
+	case 4: // #RGB shorthand
+		fmt.Sscanf(hex, "#%01x%01x%01x", &r, &g, &b)
+		r *= 17
+		g *= 17
+		b *= 17
+	default:
+		return color.Black
+	}
+	return color.NRGBA{R: r, G: g, B: b, A: 255}
 }
 
 // applyFyneTheme 根据配置应用 Fyne 主题
@@ -759,8 +802,6 @@ func (a *App) applyFyneTheme() {
 	if a.cfg.UI.Theme == "dark" {
 		variant = fynetheme.VariantDark
 	}
-	fyne.CurrentApp().Settings().SetTheme(&forcedTheme{variant: variant})
+	colors := theme.GetColorsByName(theme.ThemeType(a.cfg.UI.Theme))
+	fyne.CurrentApp().Settings().SetTheme(&brandTheme{variant: variant, colors: colors})
 }
-
-// Ensure app package is imported
-var _ = app.New

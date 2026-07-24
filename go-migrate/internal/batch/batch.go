@@ -122,7 +122,7 @@ func (bp *BatchProcessor) Cancel() {
 
 // Process 执行批量处理
 func (bp *BatchProcessor) Process(op OperationType, mode Mode, paths []string, outputDir string,
-	preserveStructure bool, algo string, keyType crypto.KeyType,
+	preserveStructure bool, algo crypto.AlgorithmType, keyType crypto.KeyType,
 	key, password, iv, tag, salt []byte) (*BatchResult, error) {
 
 	bp.isCancelled.Store(false)
@@ -425,7 +425,7 @@ func filepathBaseExt(filename string) (string, string) {
 }
 
 // findMatchingKeyFile 查找与输入文件匹配的密钥文件
-func findMatchingKeyFile(inputPath, outputDir, algorithm string, keyType crypto.KeyType) string {
+func findMatchingKeyFile(inputPath, outputDir string, algorithm crypto.AlgorithmType, keyType crypto.KeyType) string {
 	baseName := filepath.Base(inputPath)
 
 	// 处理文件名，去除.enc扩展名获取原始文件名
@@ -451,7 +451,7 @@ func findMatchingKeyFile(inputPath, outputDir, algorithm string, keyType crypto.
 			continue
 		}
 
-		if algorithm == "OTP" {
+		if algorithm == crypto.AlgorithmOTP {
 			// 使用 BuildKeyFilePath 生成标准路径
 			possibleKeyFiles = append(possibleKeyFiles,
 				crypto.BuildKeyFilePath(searchDir, originalName, crypto.AlgorithmOTP, crypto.KeyTypeRandom, "hex"),
@@ -530,7 +530,7 @@ func findMatchingKeyFile(inputPath, outputDir, algorithm string, keyType crypto.
 
 // processFile 处理单个文件
 func (bp *BatchProcessor) processFile(op OperationType, inputPath, outputPath, keyPath string,
-	algo string, keyType crypto.KeyType, key, password, iv, tag, salt []byte) error {
+	algo crypto.AlgorithmType, keyType crypto.KeyType, key, password, iv, tag, salt []byte) error {
 
 	outputDir := filepath.Dir(outputPath)
 	if err := os.MkdirAll(outputDir, 0755); err != nil {
@@ -547,17 +547,17 @@ func (bp *BatchProcessor) processFile(op OperationType, inputPath, outputPath, k
 }
 
 func (bp *BatchProcessor) encryptFile(inputPath, outputPath string,
-	algo string, keyType crypto.KeyType, password, salt []byte) error {
+	algo crypto.AlgorithmType, keyType crypto.KeyType, password, salt []byte) error {
 
 	switch algo {
-	case "OTP":
+	case crypto.AlgorithmOTP:
 		// OTP 流式加密：使用 BuildKeyFilePath 生成统一路径
 		baseName := filepath.Base(inputPath)
 		keyPath := crypto.BuildKeyFilePath(filepath.Dir(outputPath), baseName, crypto.AlgorithmOTP, crypto.KeyTypeRandom, "hex")
 		otp := crypto.NewOTPAlgorithm()
 		_, err := otp.EncryptToFile(inputPath, outputPath, keyPath, bp.chunkSize)
 		return err
-	case "AES256":
+	case crypto.AlgorithmAES256:
 		aes := crypto.NewAES256Algorithm()
 		result, err := aes.EncryptToFile(inputPath, outputPath, keyType, password, salt, bp.chunkSize)
 		if err != nil {
@@ -577,10 +577,10 @@ func (bp *BatchProcessor) encryptFile(inputPath, outputPath string,
 }
 
 func (bp *BatchProcessor) decryptFile(inputPath, outputPath, keyPath string,
-	algo string, keyType crypto.KeyType, key, password, iv, tag, salt []byte) error {
+	algo crypto.AlgorithmType, keyType crypto.KeyType, key, password, iv, tag, salt []byte) error {
 
 	switch algo {
-	case "OTP":
+	case crypto.AlgorithmOTP:
 		if keyPath == "" {
 			return fmt.Errorf("OTP解密需要密钥文件")
 		}
@@ -588,7 +588,7 @@ func (bp *BatchProcessor) decryptFile(inputPath, outputPath, keyPath string,
 		otp := crypto.NewOTPAlgorithm()
 		_, err := otp.DecryptFromFile(inputPath, outputPath, keyPath, bp.chunkSize)
 		return err
-	case "AES256":
+	case crypto.AlgorithmAES256:
 		aes := crypto.NewAES256Algorithm()
 		if keyType == crypto.KeyTypePassword || len(password) > 0 {
 			_, err := aes.DecryptFromFile(inputPath, outputPath, keyType, nil, nil, nil, password, nil, bp.chunkSize)

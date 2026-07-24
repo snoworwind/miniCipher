@@ -47,7 +47,8 @@ const (
 	AESKeyLength  = 32 // AES256 密钥 32 字节
 	AESIVLength   = 12 // GCM 推荐 12 字节 IV
 	AESTagLength  = 16 // GCM 认证标签 16 字节
-	PBKDF2Iters   = 100000
+	PBKDF2Iters       = 600000 // OWASP recommended minimum for PBKDF2-SHA256
+	PBKDF2ItersLegacy = 100000 // backward compatibility for files encrypted with older versions
 	SaltLength    = 16
 	ChunkLenBytes = 4 // 分块长度字段占用字节数
 )
