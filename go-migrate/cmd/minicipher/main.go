@@ -47,7 +47,7 @@ func runGUI() {
 	if cfg.Debug {
 		platform.AttachOrAllocConsole()
 		log.Setup(cfg.Advanced.LogLevel, true)
-		log.Debug("调试模式已启用", "config", cfg)
+		log.Debug("调试模式已启用")
 	}
 	// GUI mode without debug: DefaultLogger remains NoOpLogger (silent)
 
@@ -104,25 +104,30 @@ func printUsage() {
 	fmt.Print(translator.T("usage.title"))
 }
 
-// readPassword reads password from the specified source
-func readPassword(passwordStdin bool, passwordEnv string, args []string) (string, error) {
+// readPassword reads password from the specified source.
+// Returns []byte so the caller can zero the buffer after use.
+func readPassword(passwordStdin bool, passwordEnv string, args []string) ([]byte, error) {
 	// Priority 1: stdin (most secure, no shell history)
 	if passwordStdin {
 		reader := bufio.NewReader(os.Stdin)
-		line, err := reader.ReadString('\n')
+		line, err := reader.ReadBytes('\n')
 		if err != nil && err != io.EOF {
-			return "", fmt.Errorf("%s", translator.Tf("error.password_stdin", err))
+			return nil, fmt.Errorf("%s", translator.Tf("error.password_stdin", err))
 		}
-		return strings.TrimRight(line, "\r\n"), nil
+		// Trim trailing \r\n
+		for len(line) > 0 && (line[len(line)-1] == '\n' || line[len(line)-1] == '\r') {
+			line = line[:len(line)-1]
+		}
+		return line, nil
 	}
 
 	// Priority 2: environment variable
 	if passwordEnv != "" {
 		val := os.Getenv(passwordEnv)
 		if val != "" {
-			return val, nil
+			return []byte(val), nil
 		}
-		return "", fmt.Errorf("%s", translator.Tf("error.password_env_empty", passwordEnv))
+		return nil, fmt.Errorf("%s", translator.Tf("error.password_env_empty", passwordEnv))
 	}
 
 	// Priority 3: deprecated --password= flag (kept for backwards compat with warning)
@@ -130,22 +135,35 @@ func readPassword(passwordStdin bool, passwordEnv string, args []string) (string
 		if strings.HasPrefix(arg, "--password=") {
 			fmt.Fprintln(os.Stderr, translator.T("warn.password_cli"))
 			fmt.Fprintln(os.Stderr, translator.T("warn.password_cli_hint"))
-			return arg[11:], nil
+			return []byte(arg[11:]), nil
 		}
 	}
 
-	return "", fmt.Errorf("%s", translator.Tf("error.no_password"))
+	return nil, fmt.Errorf("%s", translator.Tf("error.no_password"))
+}
+
+// clearBytes 清零字节切片，用于清除内存中的敏感数据（密码、密钥等）
+func clearBytes(b []byte) {
+	for i := range b {
+		b[i] = 0
+	}
 }
 
 func parseArgs(args []string) map[string]string {
 	result := make(map[string]string)
-	for _, arg := range args {
+	for i := 0; i < len(args); i++ {
+		arg := args[i]
 		if strings.HasPrefix(arg, "--") {
 			eqIdx := strings.Index(arg, "=")
 			if eqIdx > 0 {
+				// --key=value syntax
 				key := arg[:eqIdx]
 				value := arg[eqIdx+1:]
 				result[key] = value
+			} else if i+1 < len(args) && !strings.HasPrefix(args[i+1], "--") {
+				// --key value syntax (next arg is not a flag)
+				result[arg] = args[i+1]
+				i++ // skip next arg
 			} else {
 				result[arg] = "true" // boolean flag
 			}
@@ -183,7 +201,7 @@ func handleEncrypt(args []string) {
 	}
 
 	// Read password via secure channel
-	var password string
+	var password []byte
 	if kt == crypto.KeyTypePassword {
 		passwordStdin := false
 		if _, ok := parsed["--password-stdin"]; ok {
@@ -199,11 +217,12 @@ func handleEncrypt(args []string) {
 
 		var err error
 		password, err = readPassword(passwordStdin, passwordEnv, args[2:])
-		if err != nil || password == "" {
+		if err != nil || len(password) == 0 {
 			fmt.Fprintf(os.Stderr, "%v\n", err)
 			fmt.Fprintf(os.Stderr, "%s\n", translator.Tf("hint.password_usage", os.Args[0]))
 			os.Exit(1)
 		}
+		defer clearBytes(password)
 	}
 
 	if _, err := os.Stat(inputFile); os.IsNotExist(err) {
@@ -234,7 +253,7 @@ func handleEncrypt(args []string) {
 		result, err = otp.EncryptToFile(inputFile, outputFile, otpKeyPath, chunkSize)
 	case crypto.AlgorithmAES256:
 		aes := crypto.NewAES256Algorithm()
-		result, err = aes.EncryptToFile(inputFile, outputFile, kt, []byte(password), nil, chunkSize)
+		result, err = aes.EncryptToFile(inputFile, outputFile, kt, password, nil, chunkSize)
 	default:
 		fmt.Fprintf(os.Stderr, "%s\n", translator.Tf("error.algo_not_supported", algo))
 		os.Exit(1)
@@ -283,7 +302,7 @@ func handleDecrypt(args []string) {
 	}
 
 	// Read password via secure channel
-	var password string
+	var password []byte
 	if passwordStdin || passwordEnv != "" {
 		var pwdErr error
 		password, pwdErr = readPassword(passwordStdin, passwordEnv, args[2:])
@@ -291,6 +310,7 @@ func handleDecrypt(args []string) {
 			fmt.Fprintf(os.Stderr, "%v\n", pwdErr)
 			os.Exit(1)
 		}
+		defer clearBytes(password)
 	}
 
 	if _, statErr := os.Stat(inputFile); os.IsNotExist(statErr) {
@@ -299,7 +319,7 @@ func handleDecrypt(args []string) {
 	}
 
 	// Auto-detect algorithm from file header (only read 4 bytes, avoid loading large files into memory)
-	algo := detectAlgorithmFromHeader(inputFile)
+	algo := crypto.DetectAlgorithmByFileHeader(inputFile)
 
 	fmt.Printf("解密: %s -> %s\n", inputFile, outputFile)
 	fmt.Printf("检测算法: %s\n\n", algo)
@@ -319,9 +339,9 @@ func handleDecrypt(args []string) {
 
 	case crypto.AlgorithmAES256:
 		aes := crypto.NewAES256Algorithm()
-		if password != "" {
+		if len(password) > 0 {
 			_, decryptErr = aes.DecryptFromFile(inputFile, outputFile,
-				crypto.KeyTypePassword, nil, nil, nil, []byte(password), nil, chunkSize)
+				crypto.KeyTypePassword, nil, nil, nil, password, nil, chunkSize)
 		} else if keyFile != "" {
 			// Smart load AES key (compatible with full format and plain key format)
 			key, iv, tag, e := crypto.LoadKeyWithIVTag(keyFile)
@@ -352,39 +372,6 @@ func handleDecrypt(args []string) {
 	}
 
 	fmt.Println(translator.Tf("success.decryption_stat", outputFile))
-}
-
-// detectAlgorithmFromHeader detects algorithm type from file header (only reads 4 bytes)
-func detectAlgorithmFromHeader(filePath string) crypto.AlgorithmType {
-	f, err := os.Open(filePath)
-	if err != nil {
-		return crypto.AlgorithmAES256
-	}
-	defer f.Close()
-
-	header := make([]byte, 4)
-	if _, err := io.ReadFull(f, header); err != nil {
-		// Can't read header — fall back to extension-based detection
-		if strings.HasSuffix(strings.ToLower(filePath), ".enc") {
-			return crypto.AlgorithmOTP
-		}
-		return crypto.AlgorithmAES256
-	}
-
-	// New format: OTP\x00 header
-	if header[0] == 'O' && header[1] == 'T' && header[2] == 'P' && header[3] == 0x00 {
-		return crypto.AlgorithmOTP
-	}
-	// AES format: AES\x00 / AES\x01 / AES\x02
-	if header[0] == 'A' && header[1] == 'E' && header[2] == 'S' &&
-		(header[3] == 0x00 || header[3] == 0x01 || header[3] == 0x02) {
-		return crypto.AlgorithmAES256
-	}
-	// Fall back to extension for old OTP files without header
-	if strings.HasSuffix(strings.ToLower(filePath), ".enc") {
-		return crypto.AlgorithmOTP
-	}
-	return crypto.AlgorithmAES256
 }
 
 // handleBatch batch encrypt/decrypt CLI entry
@@ -436,11 +423,12 @@ func handleBatch(args []string) {
 		}
 
 		pwd, err := readPassword(passwordStdin, passwordEnv, args[3:])
-		if err != nil || pwd == "" {
+		if err != nil || len(pwd) == 0 {
 			fmt.Fprintf(os.Stderr, "%v\n", err)
 			os.Exit(1)
 		}
-		password = []byte(pwd)
+		password = pwd
+		defer clearBytes(password)
 	}
 
 	// Processing mode

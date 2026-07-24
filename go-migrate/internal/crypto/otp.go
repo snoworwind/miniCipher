@@ -142,6 +142,14 @@ func (o *OTPAlgorithm) EncryptToFileWithProgress(inputFile, outputFile, keyFileP
 		}
 	}
 
+	// 清零缓冲区以清除内存中的敏感数据
+	for i := range buf {
+		buf[i] = 0
+	}
+	for i := range keyBuf {
+		keyBuf[i] = 0
+	}
+
 	return &EncryptionResult{
 		Ciphertext: nil, // 大文件不保存完整密文
 		Key:        nil, // 密钥已写入独立文件，不在内存中保留
@@ -262,6 +270,11 @@ func (o *OTPAlgorithm) DecryptFromFileWithProgress(inputFile, outputFile, keyPat
 		}
 	}
 
+	// 清零缓冲区以清除内存中的敏感数据
+	for i := range buf {
+		buf[i] = 0
+	}
+
 	return &DecryptionResult{
 		Plaintext: nil, // 大文件不保存完整明文
 		Algorithm: AlgorithmOTP,
@@ -277,6 +290,7 @@ const (
 )
 
 // detectOTPKeyFormat 检测OTP密钥文件格式并返回密钥字节数
+// 优先根据文件扩展名判断，其次使用内容试探法。
 // 返回 (格式, 密钥字节数, 错误)
 func detectOTPKeyFormat(keyPath string) (otpKeyFormat, int64, error) {
 	info, err := os.Stat(keyPath)
@@ -285,7 +299,21 @@ func detectOTPKeyFormat(keyPath string) (otpKeyFormat, int64, error) {
 	}
 	fileSize := info.Size()
 
-	// 读前几个字节判断格式
+	// 优先根据文件扩展名判断
+	ext := ""
+	if len(keyPath) > 4 {
+		ext = keyPath[len(keyPath)-4:]
+	}
+	if ext == ".bin" {
+		return otpKeyBinary, fileSize, nil
+	}
+	if ext == ".txt" {
+		// .txt files are hex-encoded; each byte is 2 hex chars.
+		// Estimate key size as fileSize/2 (may include whitespace).
+		return otpKeyHex, fileSize / 2, nil
+	}
+
+	// 扩展名未知时，使用内容试探法
 	f, err := os.Open(keyPath)
 	if err != nil {
 		return 0, 0, fmt.Errorf("打开密钥文件失败: %w", err)
@@ -297,7 +325,11 @@ func detectOTPKeyFormat(keyPath string) (otpKeyFormat, int64, error) {
 	if fileSize < int64(len(peek)) {
 		peek = make([]byte, fileSize)
 	}
-	n, _ := f.Read(peek)
+	n, readErr := f.Read(peek)
+	if readErr != nil && readErr != io.EOF {
+		// If we can't read, assume binary
+		return otpKeyBinary, fileSize, nil
+	}
 	peek = peek[:n]
 
 	// 检查是否全为 hex 字符（0-9, a-f, A-F, 可能包含换行符）
@@ -317,8 +349,6 @@ func detectOTPKeyFormat(keyPath string) (otpKeyFormat, int64, error) {
 
 	if isHex && hexCharCount > 0 {
 		// hex 格式：每2个hex字符 = 1字节密钥
-		// 去除换行等空白字符估算实际hex字符总数
-		// 由于文件可能很大，估算：文件大小 ≈ 2*密钥字节数 + 少量换行
 		keyBytes := fileSize / 2
 		return otpKeyHex, keyBytes, nil
 	}

@@ -38,7 +38,7 @@ type EncryptionRequest struct {
 	OutputPath      string
 	Algorithm       AlgorithmType
 	KeyType         KeyType
-	Password        string
+	Password        []byte // 密码（使用 []byte 以便使用后可清零）
 	OtpKeyFormat    string // "hex" or "binary" for OTP key format
 	ProgressFn      func(percent int, message string)
 }
@@ -61,7 +61,7 @@ type DecryptionRequest struct {
 	Algorithm       AlgorithmType
 	KeyType         KeyType
 	KeyPath         string
-	Password        string
+	Password        []byte // 密码（使用 []byte 以便使用后可清零）
 	ProgressFn      func(percent int, message string)
 }
 
@@ -71,19 +71,29 @@ type DecryptionResponse struct {
 	Error   string
 }
 
+// makeProgressWrapper 创建进度回调的包装器，将 ProgressFunc (processed, total int64)
+// 转换为 func(percent int, message string) 格式。
+func makeProgressWrapper(fn func(percent int, message string), prefix string) ProgressFunc {
+	if fn == nil {
+		return nil
+	}
+	return func(processed, total int64) {
+		if total > 0 {
+			pct := int(processed * 100 / total)
+			fn(pct, fmt.Sprintf("%s... %d%%", prefix, pct))
+		}
+	}
+}
+
 // ValidatePassword 验证密码强度
 // 返回 (是否有效, 错误消息)
-func (fc *FileCipher) ValidatePassword(password string) (bool, string) {
-	if password == "" {
+func (fc *FileCipher) ValidatePassword(password []byte) (bool, string) {
+	if len(password) == 0 {
 		return false, "密码不能为空"
 	}
 
-	count := 0
-	for range password {
-		count++
-	}
-	if count < fc.passwordMinLength {
-		return false, fmt.Sprintf("密码太短，至少需要%d个字符", fc.passwordMinLength)
+	if len(password) < fc.passwordMinLength {
+		return false, fmt.Sprintf("密码太短，至少需要%d个字节", fc.passwordMinLength)
 	}
 
 	if fc.requireStrongPassword {
@@ -91,7 +101,8 @@ func (fc *FileCipher) ValidatePassword(password string) (bool, string) {
 		hasLower := false
 		hasDigit := false
 
-		for _, ch := range password {
+		for _, b := range password {
+			ch := rune(b)
 			switch {
 			case unicode.IsUpper(ch):
 				hasUpper = true
@@ -140,21 +151,12 @@ func (fc *FileCipher) EncryptFile(req EncryptionRequest) (*EncryptionResponse, e
 		}
 		keyFilePath := BuildKeyFilePath(outputDir, baseName, AlgorithmOTP, KeyTypeRandom, otpFormat)
 
-		// 创建进度包装器
-		var progressFn ProgressFunc
-		if req.ProgressFn != nil {
-			progressFn = func(processed, total int64) {
-				if total > 0 {
-					pct := int(processed * 100 / total)
-					req.ProgressFn(pct, fmt.Sprintf("加密中... %d%%", pct))
-				}
-			}
-		}
+			progressFn := makeProgressWrapper(req.ProgressFn, "加密中")
 
 		result, encryptError = otp.EncryptToFileWithProgress(req.InputPath, req.OutputPath, keyFilePath, chunkSize, progressFn)
 	} else { // AES256
 		if req.KeyType == KeyTypePassword {
-			if req.Password == "" {
+			if len(req.Password) == 0 {
 				return nil, fmt.Errorf("密码模式需要提供密码")
 			}
 
@@ -164,27 +166,11 @@ func (fc *FileCipher) EncryptFile(req EncryptionRequest) (*EncryptionResponse, e
 			}
 
 			aes := NewAES256Algorithm()
-			var progressFn ProgressFunc
-			if req.ProgressFn != nil {
-				progressFn = func(processed, total int64) {
-					if total > 0 {
-						pct := int(processed * 100 / total)
-						req.ProgressFn(pct, fmt.Sprintf("加密中... %d%%", pct))
-					}
-				}
-			}
-			result, encryptError = aes.EncryptToFileWithProgress(req.InputPath, req.OutputPath, KeyTypePassword, []byte(req.Password), nil, chunkSize, progressFn)
+				progressFn := makeProgressWrapper(req.ProgressFn, "加密中")
+			result, encryptError = aes.EncryptToFileWithProgress(req.InputPath, req.OutputPath, KeyTypePassword, req.Password, nil, chunkSize, progressFn)
 		} else {
 			aes := NewAES256Algorithm()
-			var progressFn ProgressFunc
-			if req.ProgressFn != nil {
-				progressFn = func(processed, total int64) {
-					if total > 0 {
-						pct := int(processed * 100 / total)
-						req.ProgressFn(pct, fmt.Sprintf("加密中... %d%%", pct))
-					}
-				}
-			}
+				progressFn := makeProgressWrapper(req.ProgressFn, "加密中")
 			result, encryptError = aes.EncryptToFileWithProgress(req.InputPath, req.OutputPath, KeyTypeRandom, nil, nil, chunkSize, progressFn)
 		}
 	}
@@ -229,21 +215,12 @@ func (fc *FileCipher) DecryptFile(req DecryptionRequest) (*DecryptionResponse, e
 	// 自动检测算法
 	detectedAlgo := req.Algorithm
 	if detectedAlgo == "" {
-		detectedAlgo = detectAlgorithmByFileHeader(req.InputPath)
+		detectedAlgo = DetectAlgorithmByFileHeader(req.InputPath)
 	}
 
 	chunkSize := fc.bufferSizeMB * 1024 * 1024
 
-	// 创建进度包装器
-	var progressFn ProgressFunc
-	if req.ProgressFn != nil {
-		progressFn = func(processed, total int64) {
-			if total > 0 {
-				pct := int(processed * 100 / total)
-				req.ProgressFn(pct, fmt.Sprintf("解密中... %d%%", pct))
-			}
-		}
-	}
+	progressFn := makeProgressWrapper(req.ProgressFn, "解密中")
 
 	switch detectedAlgo {
 	case AlgorithmOTP:
@@ -255,12 +232,12 @@ func (fc *FileCipher) DecryptFile(req DecryptionRequest) (*DecryptionResponse, e
 
 	case AlgorithmAES256:
 		aes := NewAES256Algorithm()
-		if req.KeyType == KeyTypePassword || req.Password != "" {
-			if req.Password == "" {
+		if req.KeyType == KeyTypePassword || len(req.Password) > 0 {
+			if len(req.Password) == 0 {
 				return nil, fmt.Errorf("密码模式需要密码")
 			}
 			_, decryptError = aes.DecryptFromFileWithProgress(req.InputPath, req.OutputPath,
-				KeyTypePassword, nil, nil, nil, []byte(req.Password), nil, chunkSize, progressFn)
+				KeyTypePassword, nil, nil, nil, req.Password, nil, chunkSize, progressFn)
 		} else {
 			if req.KeyPath == "" {
 				return nil, fmt.Errorf("需要密钥文件路径")
@@ -354,9 +331,10 @@ func (fc *FileCipher) SaveAESKeyAll(key, iv, tag []byte, outputDir, baseName str
 	return keyFilePath, nil
 }
 
-// detectAlgorithmByFileHeader 通过文件头检测算法类型
-// 只读取前4字节，避免大文件完全加载到内存
-func detectAlgorithmByFileHeader(filePath string) AlgorithmType {
+// DetectAlgorithmByFileHeader 通过文件头检测算法类型
+// 只读取前4字节，避免大文件完全加载到内存。
+// 返回值：AlgorithmAES256、AlgorithmOTP 或回退到 AlgorithmAES256。
+func DetectAlgorithmByFileHeader(filePath string) AlgorithmType {
 	f, err := os.Open(filePath)
 	if err != nil {
 		return AlgorithmAES256

@@ -76,7 +76,8 @@ type Progress struct {
 	Done          bool
 }
 
-// Clone 深拷贝一个 FileResult（避免并发读时底层 slice 被修改）
+// Clone returns a copy of the progress snapshot for safe concurrent reads.
+// All fields are value types, so the default copy is safe.
 func (p Progress) Clone() Progress {
 	return p
 }
@@ -146,7 +147,7 @@ func (bp *BatchProcessor) Process(op OperationType, mode Mode, paths []string, o
 		}
 	}
 
-	files, totalSize, err := bp.collectFiles(paths, op)
+	files, totalSize, err := bp.collectFiles(paths, op, mode)
 	if err != nil {
 		return nil, err
 	}
@@ -258,7 +259,7 @@ func (bp *BatchProcessor) Process(op OperationType, mode Mode, paths []string, o
 }
 
 // collectFiles 收集要处理的文件，并进行过滤
-func (bp *BatchProcessor) collectFiles(paths []string, op OperationType) ([]string, int64, error) {
+func (bp *BatchProcessor) collectFiles(paths []string, op OperationType, mode Mode) ([]string, int64, error) {
 	var files []string
 	var totalSize int64
 
@@ -284,14 +285,14 @@ func (bp *BatchProcessor) collectFiles(paths []string, op OperationType) ([]stri
 			continue
 		}
 		if info.IsDir() {
-			if bp.processMode == ModeFolderRecursive || bp.processMode == ModeFolder {
+			if mode == ModeFolderRecursive || mode == ModeFolder {
 				filepath.Walk(path, func(p string, fi os.FileInfo, err error) error {
 					if err != nil || fi.IsDir() {
 						return nil
 					}
 
 					// ModeFolder：只处理一级子文件，不递归
-					if bp.processMode == ModeFolder {
+					if mode == ModeFolder {
 						parentDir := filepath.Dir(p)
 						if parentDir != path {
 							return nil
@@ -391,29 +392,54 @@ func (bp *BatchProcessor) buildOutputPath(inputPath, outputDir string, op Operat
 		outputName = name + ext + ".enc"
 	} else {
 		// 去除 .enc 扩展名
-		if strings.HasSuffix(name, ".enc") {
-			name = name[:len(name)-4]
-		} else if ext == ".enc" {
+		// ext is the actual extension from filepath.Ext; name is the stem.
+		// For "foo.enc": name="foo", ext=".enc" → handled by the ext==".enc" branch.
+		// For "foo.enc.enc" (double-encrypted): name="foo.enc", ext=".enc" →
+		//   name has ".enc" suffix removed → name="foo", ext remains ".enc" → ext branch handles it.
+		if ext == ".enc" {
 			ext = ""
+		} else if strings.HasSuffix(name, ".enc") {
+			name = name[:len(name)-4]
 		} else {
 			name = name + "_decrypted"
 		}
 		outputName = name + ext
 	}
 
-	if bp.preserveStruct && bp.baseInputPath != "" {
+	bp.mu.Lock()
+	preserve := bp.preserveStruct
+	basePath := bp.baseInputPath
+	bp.mu.Unlock()
+
+	if preserve && basePath != "" {
 		// 使用 relpath 计算相对路径
 		inputDir := filepath.Dir(inputPath)
-		relPath, err := filepath.Rel(bp.baseInputPath, inputDir)
+		relPath, err := filepath.Rel(basePath, inputDir)
 		if err == nil && relPath != "." {
+			// 安全检查：拒绝包含路径遍历组件的相对路径
+			if strings.Contains(relPath, "..") {
+				// 回退到不保持目录结构的行为
+				if err := os.MkdirAll(outputDir, 0755); err != nil {
+					// 返回 fallback 路径，后续 processFile 会再次尝试创建目录
+					return filepath.Join(outputDir, outputName)
+				}
+				return filepath.Join(outputDir, outputName)
+			}
 			outputSubdir := filepath.Join(outputDir, relPath)
-			os.MkdirAll(outputSubdir, 0755)
+			if err := os.MkdirAll(outputSubdir, 0755); err != nil {
+				// 目录创建失败，回退到输出目录
+				_ = os.MkdirAll(outputDir, 0755)
+				return filepath.Join(outputDir, outputName)
+			}
 			return filepath.Join(outputSubdir, outputName)
 		}
 	}
 
 	// 确保输出目录存在
-	os.MkdirAll(outputDir, 0755)
+	if err := os.MkdirAll(outputDir, 0755); err != nil {
+		// 返回路径，让后续操作报告具体错误
+		return filepath.Join(outputDir, outputName)
+	}
 	return filepath.Join(outputDir, outputName)
 }
 
@@ -616,11 +642,15 @@ func (bp *BatchProcessor) decryptFile(inputPath, outputPath, keyPath string,
 
 // Duration 返回处理耗时
 func (r *BatchResult) Duration() time.Duration {
+	r.mu.Lock()
+	defer r.mu.Unlock()
 	return r.EndTime.Sub(r.StartTime)
 }
 
 // SuccessRate 返回成功率
 func (r *BatchResult) SuccessRate() float64 {
+	r.mu.Lock()
+	defer r.mu.Unlock()
 	if r.TotalFiles == 0 {
 		return 0
 	}
@@ -629,12 +659,16 @@ func (r *BatchResult) SuccessRate() float64 {
 
 // ElapsedSeconds 返回耗时（秒）
 func (r *BatchResult) ElapsedSeconds() float64 {
+	r.mu.Lock()
+	defer r.mu.Unlock()
 	return r.EndTime.Sub(r.StartTime).Seconds()
 }
 
 // AverageSpeed 返回平均处理速度（字节/秒）
 func (r *BatchResult) AverageSpeed() float64 {
-	elapsed := r.ElapsedSeconds()
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	elapsed := r.EndTime.Sub(r.StartTime).Seconds()
 	if elapsed == 0 {
 		return 0
 	}
@@ -643,9 +677,27 @@ func (r *BatchResult) AverageSpeed() float64 {
 
 // StatisticsReport 生成统计报告
 func (r *BatchResult) StatisticsReport() string {
-	elapsed := r.Duration()
+	r.mu.Lock()
+	totalFiles := r.TotalFiles
+	successFiles := r.SuccessFiles
+	failedFiles := r.FailedFiles
+	totalBytes := r.TotalBytes
+	processedBytes := r.ProcessedBytes
+	startTime := r.StartTime
+	endTime := r.EndTime
+	r.mu.Unlock()
+
+	elapsed := endTime.Sub(startTime)
 	minutes := int(elapsed.Minutes())
 	seconds := elapsed.Seconds() - float64(minutes*60)
+	successRate := float64(0)
+	if totalFiles > 0 {
+		successRate = float64(successFiles) / float64(totalFiles) * 100
+	}
+	avgSpeed := float64(0)
+	if elapsed.Seconds() > 0 {
+		avgSpeed = float64(processedBytes) / elapsed.Seconds()
+	}
 
 	return fmt.Sprintf(
 		"\n=== 批量处理统计报告 ===\n"+
@@ -658,16 +710,16 @@ func (r *BatchResult) StatisticsReport() string {
 			"耗时: %d分%.1f秒\n"+
 			"平均速度: %s/秒\n"+
 			"========================\n",
-		r.TotalFiles,
-		r.SuccessFiles,
-		r.FailedFiles,
-		r.SuccessRate(),
-		formatBytes(r.TotalBytes),
-		formatMB(r.TotalBytes),
-		formatBytes(r.ProcessedBytes),
-		formatMB(r.ProcessedBytes),
+		totalFiles,
+		successFiles,
+		failedFiles,
+		successRate,
+		formatBytes(totalBytes),
+		formatMB(totalBytes),
+		formatBytes(processedBytes),
+		formatMB(processedBytes),
 		minutes, seconds,
-		formatMB(int64(r.AverageSpeed())),
+		formatMB(int64(avgSpeed)),
 	)
 }
 

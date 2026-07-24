@@ -198,7 +198,7 @@ func TestCollectFiles(t *testing.T) {
 	bp := New(4, 10)
 	bp.processMode = ModeFolder
 
-	collected, totalSize, err := bp.collectFiles([]string{tmpDir}, OpEncrypt)
+	collected, totalSize, err := bp.collectFiles([]string{tmpDir}, OpEncrypt, ModeFolder)
 	if err != nil {
 		t.Fatalf("collectFiles failed: %v", err)
 	}

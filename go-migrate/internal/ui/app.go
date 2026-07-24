@@ -357,7 +357,7 @@ func (a *App) doEncrypt() {
 			OutputPath:   outputFile,
 			Algorithm:    algoType,
 			KeyType:      kt,
-			Password:     password,
+			Password:     []byte(password),
 			OtpKeyFormat: a.cfg.Crypto.OTPKeyFormat,
 			ProgressFn: func(pct int, msg string) {
 				a.encStatusLabel.SetText(msg)
@@ -471,7 +471,7 @@ func (a *App) doDecrypt() {
 			OutputPath: outputFile,
 			Algorithm:  "", // 自动检测
 			KeyPath:    keyFilePath,
-			Password:   password,
+			Password:   []byte(password),
 			ProgressFn: func(pct int, msg string) {
 				a.decStatusLabel.SetText(msg)
 				a.win.Canvas().Refresh(a.decStatusLabel)

@@ -254,23 +254,23 @@ func TestValidatePassword(t *testing.T) {
 
 	tests := []struct {
 		name     string
-		password string
+		password []byte
 		valid    bool
 	}{
-		{"空密码", "", false},
-		{"太短", "Ab1", false},
-		{"缺少数字", "Abcdefgh", false},
-		{"缺少大写", "abc12345", false},
-		{"缺少小写", "ABC12345", false},
-		{"有效强密码", "MyPass123", true},
-		{"刚刚好", "Abcd1234", true},
+		{"空密码", []byte(""), false},
+		{"太短", []byte("Ab1"), false},
+		{"缺少数字", []byte("Abcdefgh"), false},
+		{"缺少大写", []byte("abc12345"), false},
+		{"缺少小写", []byte("ABC12345"), false},
+		{"有效强密码", []byte("MyPass123"), true},
+		{"刚刚好", []byte("Abcd1234"), true},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			valid, _ := fc.ValidatePassword(tt.password)
 			if valid != tt.valid {
-				t.Errorf("密码 %q: got valid=%v, want %v", tt.password, valid, tt.valid)
+				t.Errorf("密码 %s: got valid=%v, want %v", tt.password, valid, tt.valid)
 			}
 		})
 	}

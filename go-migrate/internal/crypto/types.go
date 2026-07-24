@@ -25,7 +25,9 @@ const (
 // processed: 已处理字节数, total: 总字节数 (-1 表示未知)
 type ProgressFunc func(processed, total int64)
 
-// EncryptionResult 加密结果
+// EncryptionResult holds the result of an encryption operation.
+// For large files, Ciphertext may be nil (streamed to disk).
+// Callers should clear Key, IV, and Tag when no longer needed.
 type EncryptionResult struct {
 	Ciphertext []byte        // 密文（大文件加密后可能为空）
 	Key        []byte        // 密钥（随机密钥模式）
@@ -36,9 +38,10 @@ type EncryptionResult struct {
 	KeyType    KeyType       // 密钥类型
 }
 
-// DecryptionResult 解密结果
+// DecryptionResult holds the result of a decryption operation.
+// For large files, Plaintext may be nil (streamed to disk).
 type DecryptionResult struct {
-	Plaintext []byte        // 明文
+	Plaintext []byte        // 明文（大文件解密后可能为空）
 	Algorithm AlgorithmType // 算法类型
 }
 

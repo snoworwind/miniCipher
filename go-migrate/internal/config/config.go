@@ -161,10 +161,14 @@ func deepMergeJSON(config *Config, data []byte) error {
 
 	// 仅当版本字段存在时覆盖
 	if v, ok := raw["version"]; ok {
-		json.Unmarshal(v, &config.Version)
+		if err := json.Unmarshal(v, &config.Version); err != nil {
+			// Keep default; malformed field is non-fatal
+		}
 	}
 	if v, ok := raw["debug"]; ok {
-		json.Unmarshal(v, &config.Debug)
+		if err := json.Unmarshal(v, &config.Debug); err != nil {
+			// Keep default; malformed field is non-fatal
+		}
 	}
 
 	// UI 子配置合并
@@ -280,7 +284,7 @@ func (m *Manager) Save() error {
 		return fmt.Errorf("序列化配置失败: %w", err)
 	}
 
-	if err := os.WriteFile(m.configFile, data, 0644); err != nil {
+	if err := os.WriteFile(m.configFile, data, 0600); err != nil {
 		return fmt.Errorf("写入配置文件失败: %w", err)
 	}
 	return nil

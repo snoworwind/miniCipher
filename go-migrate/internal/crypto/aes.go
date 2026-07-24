@@ -211,6 +211,16 @@ func (a *AES256Algorithm) EncryptToFileWithProgress(inputFile, outputFile string
 		return nil, fmt.Errorf("写入块大小失败: %w", err)
 	}
 
+	// Build AAD from header fields to cryptographically bind metadata to ciphertext
+	var aad []byte
+	aad = append(aad, 'A', 'E', 'S', byte(AESVersionChunked))
+	if kt == KeyTypePassword {
+		aad = append(aad, byte(len(salt)))
+		aad = append(aad, salt...)
+	}
+	aad = append(aad, baseIV...)
+	aad = append(aad, chunkSizeBuf...)
+
 	// 分块读取、加密、写入
 	buf := make([]byte, chunkSize)
 	chunkIndex := uint64(0)
@@ -223,8 +233,8 @@ func (a *AES256Algorithm) EncryptToFileWithProgress(inputFile, outputFile string
 			// 生成当前块的 IV = baseIV XOR chunkIndex
 			chunkIV := makeChunkIV(baseIV, chunkIndex)
 
-			// GCM Seal
-			sealed := gcm.Seal(nil, chunkIV, buf[:n], nil)
+			// GCM Seal with AAD binding header metadata
+			sealed := gcm.Seal(nil, chunkIV, buf[:n], aad)
 			// sealed = ciphertext + tag (tag 在最后 16 字节)
 
 			// 写入块长度（仅密文长度，不含 tag）
@@ -252,6 +262,11 @@ func (a *AES256Algorithm) EncryptToFileWithProgress(inputFile, outputFile string
 		if readErr != nil {
 			return nil, fmt.Errorf("读取输入文件失败: %w", readErr)
 		}
+	}
+
+	// Zero buffer to clear plaintext from memory
+	for i := range buf {
+		buf[i] = 0
 	}
 
 	return &EncryptionResult{
@@ -423,10 +438,26 @@ func (a *AES256Algorithm) decryptChunked(f *os.File, outputFile string,
 		return nil, fmt.Errorf("读取块大小失败: %w", err)
 	}
 	hdr.fileChunkSize = binary.BigEndian.Uint32(fileChunkSizeBuf)
-	_ = hdr.fileChunkSize
+	// Validate and use the file's chunk size
+	if int(hdr.fileChunkSize) != chunkSize && int(hdr.fileChunkSize) > 0 {
+		chunkSize = int(hdr.fileChunkSize)
+	}
 
 	// Save position right before chunk data for potential retry
-	chunkDataStart, _ := f.Seek(0, io.SeekCurrent)
+	chunkDataStart, err := f.Seek(0, io.SeekCurrent)
+	if err != nil {
+		return nil, fmt.Errorf("获取当前文件位置失败: %w", err)
+	}
+
+	// Reconstruct AAD from header fields to validate metadata integrity
+	var aad []byte
+	aad = append(aad, 'A', 'E', 'S', byte(AESVersionChunked))
+	if keyType == KeyTypePassword {
+		aad = append(aad, byte(len(hdr.salt)))
+		aad = append(aad, hdr.salt...)
+	}
+	aad = append(aad, hdr.baseIV...)
+	aad = append(aad, fileChunkSizeBuf...)
 
 	// Try decryption with current iteration count; fall back to legacy on failure
 	itersToTry := []int{PBKDF2Iters}
@@ -499,7 +530,7 @@ func (a *AES256Algorithm) decryptChunked(f *os.File, outputFile string,
 			}
 
 			chunkIV := makeChunkIV(hdr.baseIV, chunkIndex)
-			plaintext, err := gcm.Open(nil, chunkIV, chunkBuf, nil)
+			plaintext, err := gcm.Open(nil, chunkIV, chunkBuf, aad)
 			if err != nil {
 				decryptOK = false
 				lastErr = fmt.Errorf("块 %d 解密失败（密钥或文件可能已损坏）: %w", chunkIndex, err)
@@ -520,7 +551,10 @@ func (a *AES256Algorithm) decryptChunked(f *os.File, outputFile string,
 			}
 		}
 
-		outFile.Close()
+		if closeErr := outFile.Close(); closeErr != nil {
+			decryptOK = false
+			lastErr = fmt.Errorf("关闭输出文件失败: %w", closeErr)
+		}
 
 		if decryptOK {
 			// 最后一次进度汇报
@@ -531,7 +565,10 @@ func (a *AES256Algorithm) decryptChunked(f *os.File, outputFile string,
 		}
 
 		// Clean up partial output file before retry
-		os.Remove(outputFile)
+		if rmErr := os.Remove(outputFile); rmErr != nil {
+			// Non-fatal: partial file removal failure doesn't affect the main operation
+			_ = rmErr
+		}
 
 		// If not password mode or last attempt, don't retry
 		if keyType != KeyTypePassword || attempt == len(itersToTry)-1 {
