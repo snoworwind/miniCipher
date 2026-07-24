@@ -340,6 +340,10 @@ func (a *App) doEncrypt() {
 	go func() {
 		defer a.win.Canvas().Refresh(a.encStatusLabel)
 
+		// 将密码转换为 []byte 并在使用后清零，避免敏感数据残留内存
+		pwdBytes := []byte(password)
+		defer crypto.ClearBytes(pwdBytes)
+
 		bufSize := a.cfgMgr.GetBufferSizeMB()
 		fc := crypto.NewFileCipher(bufSize,
 			a.cfg.Crypto.PasswordMinLength,
@@ -357,7 +361,7 @@ func (a *App) doEncrypt() {
 			OutputPath:   outputFile,
 			Algorithm:    algoType,
 			KeyType:      kt,
-			Password:     []byte(password),
+			Password:     pwdBytes,
 			OtpKeyFormat: a.cfg.Crypto.OTPKeyFormat,
 			ProgressFn: func(pct int, msg string) {
 				a.encStatusLabel.SetText(msg)
@@ -461,6 +465,10 @@ func (a *App) doDecrypt() {
 	go func() {
 		defer a.win.Canvas().Refresh(a.decStatusLabel)
 
+		// 将密码转换为 []byte 并在使用后清零，避免敏感数据残留内存
+		pwdBytes := []byte(password)
+		defer crypto.ClearBytes(pwdBytes)
+
 		bufSize := a.cfgMgr.GetBufferSizeMB()
 		fc := crypto.NewFileCipher(bufSize,
 			a.cfg.Crypto.PasswordMinLength,
@@ -471,7 +479,7 @@ func (a *App) doDecrypt() {
 			OutputPath: outputFile,
 			Algorithm:  "", // 自动检测
 			KeyPath:    keyFilePath,
-			Password:   []byte(password),
+			Password:   pwdBytes,
 			ProgressFn: func(pct int, msg string) {
 				a.decStatusLabel.SetText(msg)
 				a.win.Canvas().Refresh(a.decStatusLabel)
@@ -636,11 +644,15 @@ func (a *App) doBatch(isEncrypt bool) {
 	go func() {
 		defer a.batchCancelBtn.Disable()
 
+		// 将密码转换为 []byte 并在使用后清零，避免敏感数据残留内存
+		pwdBytes := []byte(password)
+		defer crypto.ClearBytes(pwdBytes)
+
 		a.batchProcessor = batch.New(maxThreads, a.cfgMgr.GetBufferSizeMB())
 		a.batchProcessor.SetProgressCallback(a.onBatchProgress)
 
 		result, err := a.batchProcessor.Process(op, batchMode, paths, outputDir, preserveStruct,
-			crypto.AlgorithmType(algo), kt, nil, []byte(password), nil, nil, nil)
+			crypto.AlgorithmType(algo), kt, nil, pwdBytes, nil, nil, nil)
 		if err != nil {
 			a.batchStatusLabel.SetText(fmt.Sprintf("❌ %s", err.Error()))
 			return

@@ -85,9 +85,9 @@ clean:
 install: build-cli
 	cp bin/minicipher $(shell go env GOPATH)/bin/minicipher
 
-# 交叉编译
+# 交叉编译（每步失败立即停止）
 build-all:
-	GOOS=darwin GOARCH=amd64 go build -trimpath -ldflags="$(GO_LDFLAGS)" -o bin/minicipher-darwin-amd64 ./cmd/minicipher/
-	GOOS=darwin GOARCH=arm64 go build -trimpath -ldflags="$(GO_LDFLAGS)" -o bin/minicipher-darwin-arm64 ./cmd/minicipher/
-	GOOS=linux GOARCH=amd64 go build -trimpath -ldflags="$(GO_LDFLAGS)" -o bin/minicipher-linux-amd64 ./cmd/minicipher/
+	GOOS=darwin GOARCH=amd64 go build -trimpath -ldflags="$(GO_LDFLAGS)" -o bin/minicipher-darwin-amd64 ./cmd/minicipher/ && \
+	GOOS=darwin GOARCH=arm64 go build -trimpath -ldflags="$(GO_LDFLAGS)" -o bin/minicipher-darwin-arm64 ./cmd/minicipher/ && \
+	GOOS=linux GOARCH=amd64 go build -trimpath -ldflags="$(GO_LDFLAGS)" -o bin/minicipher-linux-amd64 ./cmd/minicipher/ && \
 	GOOS=windows GOARCH=amd64 go build -trimpath -ldflags="$(GO_LDFLAGS) -H windowsgui" -o bin/minicipher-windows-amd64.exe ./cmd/minicipher/

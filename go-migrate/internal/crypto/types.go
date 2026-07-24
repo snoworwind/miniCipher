@@ -70,6 +70,13 @@ func (v AESFileVersion) IsLegacyFormat() bool {
 	return v == AESVersionRandomKey || v == AESVersionPassword
 }
 
+// ClearBytes 清零字节切片，用于清除内存中的敏感数据（密码、密钥等）
+func ClearBytes(b []byte) {
+	for i := range b {
+		b[i] = 0
+	}
+}
+
 // BuildKeyFilePath 生成统一的密钥文件路径
 // dir: 输出目录, baseName: 原始文件名（不含路径）, algorithm: 算法类型, keyType: 密钥类型, otpFormat: OTP 密钥格式 ("hex"→.txt, "binary"→.bin)
 func BuildKeyFilePath(dir, baseName string, algorithm AlgorithmType, keyType KeyType, otpFormat string) string {

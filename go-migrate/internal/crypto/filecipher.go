@@ -12,8 +12,8 @@ import (
 // FileCipher 高级文件加密/解密API
 // 整合所有文件操作、分块处理、密钥管理和错误处理逻辑
 type FileCipher struct {
-	bufferSizeMB         int
-	passwordMinLength    int
+	bufferSizeMB          int
+	passwordMinLength     int
 	requireStrongPassword bool
 }
 
@@ -26,43 +26,43 @@ func NewFileCipher(bufferSizeMB, passwordMinLength int, requireStrongPassword bo
 		passwordMinLength = 8
 	}
 	return &FileCipher{
-		bufferSizeMB:         bufferSizeMB,
-		passwordMinLength:    passwordMinLength,
+		bufferSizeMB:          bufferSizeMB,
+		passwordMinLength:     passwordMinLength,
 		requireStrongPassword: requireStrongPassword,
 	}
 }
 
 // EncryptionRequest 加密请求参数
 type EncryptionRequest struct {
-	InputPath       string
-	OutputPath      string
-	Algorithm       AlgorithmType
-	KeyType         KeyType
-	Password        []byte // 密码（使用 []byte 以便使用后可清零）
-	OtpKeyFormat    string // "hex" or "binary" for OTP key format
-	ProgressFn      func(percent int, message string)
+	InputPath    string
+	OutputPath   string
+	Algorithm    AlgorithmType
+	KeyType      KeyType
+	Password     []byte // 密码（使用 []byte 以便使用后可清零）
+	OtpKeyFormat string // "hex" or "binary" for OTP key format
+	ProgressFn   func(percent int, message string)
 }
 
 // EncryptionResponse 加密响应
 type EncryptionResponse struct {
-	Key     []byte
-	IV      []byte
-	Tag     []byte
-	Salt    []byte
+	Key           []byte
+	IV            []byte
+	Tag           []byte
+	Salt          []byte
 	KeyFileNeeded bool
-	Success  bool
-	Error    string
+	Success       bool
+	Error         string
 }
 
 // DecryptionRequest 解密请求参数
 type DecryptionRequest struct {
-	InputPath       string
-	OutputPath      string
-	Algorithm       AlgorithmType
-	KeyType         KeyType
-	KeyPath         string
-	Password        []byte // 密码（使用 []byte 以便使用后可清零）
-	ProgressFn      func(percent int, message string)
+	InputPath  string
+	OutputPath string
+	Algorithm  AlgorithmType
+	KeyType    KeyType
+	KeyPath    string
+	Password   []byte // 密码（使用 []byte 以便使用后可清零）
+	ProgressFn func(percent int, message string)
 }
 
 // DecryptionResponse 解密响应
@@ -151,7 +151,7 @@ func (fc *FileCipher) EncryptFile(req EncryptionRequest) (*EncryptionResponse, e
 		}
 		keyFilePath := BuildKeyFilePath(outputDir, baseName, AlgorithmOTP, KeyTypeRandom, otpFormat)
 
-			progressFn := makeProgressWrapper(req.ProgressFn, "加密中")
+		progressFn := makeProgressWrapper(req.ProgressFn, "加密中")
 
 		result, encryptError = otp.EncryptToFileWithProgress(req.InputPath, req.OutputPath, keyFilePath, chunkSize, progressFn)
 	} else { // AES256
@@ -166,11 +166,11 @@ func (fc *FileCipher) EncryptFile(req EncryptionRequest) (*EncryptionResponse, e
 			}
 
 			aes := NewAES256Algorithm()
-				progressFn := makeProgressWrapper(req.ProgressFn, "加密中")
+			progressFn := makeProgressWrapper(req.ProgressFn, "加密中")
 			result, encryptError = aes.EncryptToFileWithProgress(req.InputPath, req.OutputPath, KeyTypePassword, req.Password, nil, chunkSize, progressFn)
 		} else {
 			aes := NewAES256Algorithm()
-				progressFn := makeProgressWrapper(req.ProgressFn, "加密中")
+			progressFn := makeProgressWrapper(req.ProgressFn, "加密中")
 			result, encryptError = aes.EncryptToFileWithProgress(req.InputPath, req.OutputPath, KeyTypeRandom, nil, nil, chunkSize, progressFn)
 		}
 	}

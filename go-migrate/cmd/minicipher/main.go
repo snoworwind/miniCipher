@@ -143,10 +143,9 @@ func readPassword(passwordStdin bool, passwordEnv string, args []string) ([]byte
 }
 
 // clearBytes 清零字节切片，用于清除内存中的敏感数据（密码、密钥等）
+// 委托给 crypto.ClearBytes 以避免代码重复
 func clearBytes(b []byte) {
-	for i := range b {
-		b[i] = 0
-	}
+	crypto.ClearBytes(b)
 }
 
 func parseArgs(args []string) map[string]string {

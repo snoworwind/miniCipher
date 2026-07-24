@@ -291,6 +291,8 @@ const (
 
 // detectOTPKeyFormat 检测OTP密钥文件格式并返回密钥字节数
 // 优先根据文件扩展名判断，其次使用内容试探法。
+// 对于 hex 格式（.txt 及试探法检测到的 hex 文件），读取实际内容计算
+// hex 字符数，以正确处理文件末尾的空白字符（换行、空格等）。
 // 返回 (格式, 密钥字节数, 错误)
 func detectOTPKeyFormat(keyPath string) (otpKeyFormat, int64, error) {
 	info, err := os.Stat(keyPath)
@@ -307,53 +309,63 @@ func detectOTPKeyFormat(keyPath string) (otpKeyFormat, int64, error) {
 	if ext == ".bin" {
 		return otpKeyBinary, fileSize, nil
 	}
-	if ext == ".txt" {
-		// .txt files are hex-encoded; each byte is 2 hex chars.
-		// Estimate key size as fileSize/2 (may include whitespace).
-		return otpKeyHex, fileSize / 2, nil
-	}
 
-	// 扩展名未知时，使用内容试探法
+	// 对于 .txt 和未知扩展名的文件，读取内容进行精确检测
 	f, err := os.Open(keyPath)
 	if err != nil {
 		return 0, 0, fmt.Errorf("打开密钥文件失败: %w", err)
 	}
 	defer f.Close()
 
-	// 尝试读少量数据判断是否为 hex
-	peek := make([]byte, 128)
-	if fileSize < int64(len(peek)) {
-		peek = make([]byte, fileSize)
-	}
-	n, readErr := f.Read(peek)
-	if readErr != nil && readErr != io.EOF {
-		// If we can't read, assume binary
+	// 读取整个文件内容以精确计算 hex 字符数
+	// 对于 .txt 格式，文件大小 = 明文长度 × 2，通常不大
+	data, err := io.ReadAll(f)
+	if err != nil {
+		// 无法读取则根据扩展名做最佳猜测
+		if ext == ".txt" {
+			return otpKeyHex, fileSize / 2, nil
+		}
 		return otpKeyBinary, fileSize, nil
 	}
-	peek = peek[:n]
 
-	// 检查是否全为 hex 字符（0-9, a-f, A-F, 可能包含换行符）
-	isHex := true
+	// 统计有效的 hex 字符数（跳过空白字符）
 	hexCharCount := 0
-	for _, b := range peek {
+	allHex := true
+	for _, b := range data {
 		if b == '\n' || b == '\r' || b == ' ' || b == '\t' {
 			continue
 		}
 		if (b >= '0' && b <= '9') || (b >= 'a' && b <= 'f') || (b >= 'A' && b <= 'F') {
 			hexCharCount++
 		} else {
-			isHex = false
+			allHex = false
 			break
 		}
 	}
 
-	if isHex && hexCharCount > 0 {
-		// hex 格式：每2个hex字符 = 1字节密钥
-		keyBytes := fileSize / 2
-		return otpKeyHex, keyBytes, nil
+	// 如果是 .txt 扩展名且全部为 hex 字符，按 hex 处理
+	if ext == ".txt" && allHex && hexCharCount > 0 {
+		return otpKeyHex, int64(hexCharCount) / 2, nil
 	}
 
-	// 二进制格式
+	// 对于未知扩展名：只有当所有非空白字符都是 hex 且 hex 字符数占比足够高时才视为 hex
+	// 这样可以避免将恰好含 hex 字节的二进制文件误判为 hex
+	if allHex && hexCharCount > 0 {
+		totalNonSpace := 0
+		for _, b := range data {
+			if b != '\n' && b != '\r' && b != ' ' && b != '\t' {
+				totalNonSpace++
+			}
+		}
+		// 至少 80% 的非空白字符是 hex 才视为 hex 格式
+		// （全部非空白字符都应该是 hex 因为 allHex=true）
+		if totalNonSpace > 0 && hexCharCount == totalNonSpace {
+			return otpKeyHex, int64(hexCharCount) / 2, nil
+		}
+	}
+
+	// .txt 文件但内容不是 hex → 视为二进制
+	// 未知扩展名且内容不是 hex → 视为二进制
 	return otpKeyBinary, fileSize, nil
 }
 
