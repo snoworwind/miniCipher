@@ -3,6 +3,7 @@ package crypto
 import (
 	"fmt"
 	"path/filepath"
+	"runtime"
 )
 
 // AlgorithmType 加密算法类型
@@ -75,6 +76,10 @@ func ClearBytes(b []byte) {
 	for i := range b {
 		b[i] = 0
 	}
+	// Prevent the compiler from optimizing away the zeroing loop.
+	// Without this barrier the compiler may prove that b is dead after
+	// the function returns and eliminate the writes entirely.
+	runtime.KeepAlive(b)
 }
 
 // BuildKeyFilePath 生成统一的密钥文件路径

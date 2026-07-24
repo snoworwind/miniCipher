@@ -102,12 +102,15 @@ func (a *AES256Algorithm) DecryptWithPassword(ciphertext, password, salt, iv, ta
 	if len(tag) != AESTagLength {
 		return nil, fmt.Errorf("认证标签长度不正确，应为%d字节，实际%d字节", AESTagLength, len(tag))
 	}
-	// Try current iteration count first, fall back to legacy for backward compatibility
-	key := pbkdf2.Key(password, salt, PBKDF2Iters, AESKeyLength, sha256.New)
-	plaintext, err := a.decryptBytes(ciphertext, key, iv, tag)
+	// Derive both keys upfront so total PBKDF2 work is constant regardless of
+	// which iteration count was used during encryption, preventing a timing
+	// side-channel that could leak encryption parameters.
+	keyCurrent := pbkdf2.Key(password, salt, PBKDF2Iters, AESKeyLength, sha256.New)
+	keyLegacy := pbkdf2.Key(password, salt, PBKDF2ItersLegacy, AESKeyLength, sha256.New)
+
+	plaintext, err := a.decryptBytes(ciphertext, keyCurrent, iv, tag)
 	if err != nil {
-		key = pbkdf2.Key(password, salt, PBKDF2ItersLegacy, AESKeyLength, sha256.New)
-		plaintext, err = a.decryptBytes(ciphertext, key, iv, tag)
+		plaintext, err = a.decryptBytes(ciphertext, keyLegacy, iv, tag)
 		if err != nil {
 			return nil, err
 		}
@@ -340,23 +343,29 @@ func (a *AES256Algorithm) decryptLegacy(inputFile, outputFile string,
 	}
 
 	var finalKey []byte
+	var plaintext []byte
+	var decryptErr error
 	if keyType == KeyTypePassword {
 		if useSalt == nil {
 			return nil, fmt.Errorf("密码模式解密需要salt")
 		}
-		finalKey = pbkdf2.Key(password, useSalt, PBKDF2Iters, AESKeyLength, sha256.New)
+		// Derive both keys upfront so total PBKDF2 work is constant
+		// regardless of which iteration count was used during encryption.
+		keyCurrent := pbkdf2.Key(password, useSalt, PBKDF2Iters, AESKeyLength, sha256.New)
+		keyLegacy := pbkdf2.Key(password, useSalt, PBKDF2ItersLegacy, AESKeyLength, sha256.New)
+		plaintext, decryptErr = a.decryptBytes(ciphertext, keyCurrent, useIV, useTag)
+		if decryptErr != nil {
+			plaintext, decryptErr = a.decryptBytes(ciphertext, keyLegacy, useIV, useTag)
+		}
+		if decryptErr != nil {
+			return nil, decryptErr
+		}
 	} else {
 		finalKey = key
-	}
-
-	plaintext, err := a.decryptBytes(ciphertext, finalKey, useIV, useTag)
-	if err != nil && keyType == KeyTypePassword {
-		// Fall back to legacy iteration count for backward compatibility
-		finalKey = pbkdf2.Key(password, useSalt, PBKDF2ItersLegacy, AESKeyLength, sha256.New)
-		plaintext, err = a.decryptBytes(ciphertext, finalKey, useIV, useTag)
-	}
-	if err != nil {
-		return nil, err
+		plaintext, decryptErr = a.decryptBytes(ciphertext, finalKey, useIV, useTag)
+		if decryptErr != nil {
+			return nil, decryptErr
+		}
 	}
 	// 立即释放密文内存
 	ciphertext = nil
@@ -440,6 +449,14 @@ func (a *AES256Algorithm) decryptChunked(f *os.File, outputFile string,
 		return nil, fmt.Errorf("读取块大小失败: %w", err)
 	}
 	hdr.fileChunkSize = binary.BigEndian.Uint32(fileChunkSizeBuf)
+
+	// Reject files with unreasonably large chunk sizes to prevent OOM attacks.
+	const maxChunkSize = 256 * 1024 * 1024 // 256 MB
+	if hdr.fileChunkSize > maxChunkSize {
+		return nil, fmt.Errorf("文件块大小异常 (%d 字节)，超过最大允许值 (%d 字节)，文件可能已损坏",
+			hdr.fileChunkSize, maxChunkSize)
+	}
+
 	// Validate and use the file's chunk size.
 	// The file's chunk size takes precedence — this ensures correct decryption
 	// even when the caller requests a different buffer size than what was used
@@ -467,14 +484,25 @@ func (a *AES256Algorithm) decryptChunked(f *os.File, outputFile string,
 	aad = append(aad, hdr.baseIV...)
 	aad = append(aad, fileChunkSizeBuf...)
 
-	// Try decryption with current iteration count; fall back to legacy on failure
-	itersToTry := []int{PBKDF2Iters}
+	// Derive all candidate keys upfront so total PBKDF2 work is constant
+	// regardless of which iteration count was used during encryption.
+	// This prevents a timing side-channel that could leak whether the file
+	// was encrypted with the current or legacy iteration count.
+	type candidateKey struct {
+		key []byte
+	}
+	var candidates []candidateKey
 	if keyType == KeyTypePassword {
-		itersToTry = append(itersToTry, PBKDF2ItersLegacy)
+		candidates = []candidateKey{
+			{key: pbkdf2.Key(password, saltForDerivation, PBKDF2Iters, AESKeyLength, sha256.New)},
+			{key: pbkdf2.Key(password, saltForDerivation, PBKDF2ItersLegacy, AESKeyLength, sha256.New)},
+		}
+	} else {
+		candidates = []candidateKey{{key: key}}
 	}
 
 	var lastErr error
-	for attempt, iters := range itersToTry {
+	for attempt, ck := range candidates {
 		if attempt > 0 {
 			// Retry: seek back to start of chunk data
 			if _, err := f.Seek(chunkDataStart, io.SeekStart); err != nil {
@@ -482,14 +510,7 @@ func (a *AES256Algorithm) decryptChunked(f *os.File, outputFile string,
 			}
 		}
 
-		var finalKey []byte
-		if keyType == KeyTypePassword {
-			finalKey = pbkdf2.Key(password, saltForDerivation, iters, AESKeyLength, sha256.New)
-		} else {
-			finalKey = key
-		}
-
-		block, err := aes.NewCipher(finalKey)
+		block, err := aes.NewCipher(ck.key)
 		if err != nil {
 			return nil, fmt.Errorf("创建AES密码器失败: %w", err)
 		}
@@ -578,11 +599,10 @@ func (a *AES256Algorithm) decryptChunked(f *os.File, outputFile string,
 			_ = rmErr
 		}
 
-		// If not password mode or last attempt, don't retry
-		if keyType != KeyTypePassword || attempt == len(itersToTry)-1 {
+		// If not password mode or last candidate, don't retry
+		if keyType != KeyTypePassword || attempt == len(candidates)-1 {
 			return nil, lastErr
 		}
-		// Otherwise retry with legacy iteration count
 	}
 
 	return nil, lastErr

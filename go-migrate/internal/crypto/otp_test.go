@@ -235,10 +235,6 @@ func TestOTPBinaryKeyFormat(t *testing.T) {
 		t.Errorf("解密内容不匹配")
 	}
 }
-
-// Ensure strings import is available
-var _ = strings.TrimSpace
-
 func TestOTPKeyFormatDetection(t *testing.T) {
 	tmpDir := t.TempDir()
 

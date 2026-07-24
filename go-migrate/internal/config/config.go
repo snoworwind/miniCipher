@@ -136,9 +136,12 @@ func (m *Manager) Load() (*Config, error) {
 	// 深度合并：先设置默认值，再应用文件中的非零值
 	config := DefaultConfig()
 	if err := deepMergeJSON(config, data); err != nil {
-		// 配置文件损坏，使用默认配置
+		// 配置文件损坏，使用默认配置。输出警告到 stderr 因为此时日志系统可能未初始化。
+		fmt.Fprintf(os.Stderr, "WARNING: 配置文件已损坏 (%v)，已恢复为默认配置\n", err)
 		m.config = DefaultConfig()
-		m.Save()
+		if saveErr := m.saveLocked(); saveErr != nil {
+			fmt.Fprintf(os.Stderr, "WARNING: 保存默认配置失败: %v\n", saveErr)
+		}
 		return m.config, nil
 	}
 
@@ -147,8 +150,11 @@ func (m *Manager) Load() (*Config, error) {
 	// 验证配置
 	if err := ValidateConfig(config); err != nil {
 		// 配置无效，使用默认配置
+		fmt.Fprintf(os.Stderr, "WARNING: 配置验证失败 (%v)，已恢复为默认配置\n", err)
 		m.config = DefaultConfig()
-		m.Save()
+		if saveErr := m.saveLocked(); saveErr != nil {
+			fmt.Fprintf(os.Stderr, "WARNING: 保存默认配置失败: %v\n", saveErr)
+		}
 		return m.config, nil
 	}
 

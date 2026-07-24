@@ -348,6 +348,7 @@ func (a *App) doEncrypt() {
 
 		// 将密码转换为 []byte 并在使用后清零，避免敏感数据残留内存
 		pwdBytes := []byte(password)
+		a.passwordEntry.SetText("")
 		defer crypto.ClearBytes(pwdBytes)
 
 		bufSize := a.cfgMgr.GetBufferSizeMB()
@@ -473,6 +474,7 @@ func (a *App) doDecrypt() {
 
 		// 将密码转换为 []byte 并在使用后清零，避免敏感数据残留内存
 		pwdBytes := []byte(password)
+		a.passwordEntry.SetText("")
 		defer crypto.ClearBytes(pwdBytes)
 
 		bufSize := a.cfgMgr.GetBufferSizeMB()
@@ -652,6 +654,7 @@ func (a *App) doBatch(isEncrypt bool) {
 
 		// 将密码转换为 []byte 并在使用后清零，避免敏感数据残留内存
 		pwdBytes := []byte(password)
+		a.passwordEntry.SetText("")
 		defer crypto.ClearBytes(pwdBytes)
 
 		a.batchProcessor = batch.New(maxThreads, a.cfgMgr.GetBufferSizeMB())
